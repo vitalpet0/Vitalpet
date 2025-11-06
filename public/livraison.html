@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Livraison | VitalPet</title>
+  <meta name="description" content="Renseignez vos informations de livraison pour votre box VitalPet." />
+  <link rel="icon" href="/favicon.ico" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    input:-webkit-autofill, select:-webkit-autofill, textarea:-webkit-autofill {
+      box-shadow: 0 0 0px 1000px white inset !important;
+    }
+  </style>
+</head>
+<body class="bg-white text-neutral-900">
+  <!-- Header -->
+  <header class="border-b sticky top-0 bg-white/90 backdrop-blur z-10">
+    <div class="container mx-auto px-4 h-16 flex items-center justify-between">
+      <a href="/" class="flex items-center gap-3">
+        <span class="inline-grid place-items-center w-8 h-8 rounded-xl bg-emerald-600 text-white font-bold">VP</span>
+        <span class="text-xl font-semibold text-emerald-700">VitalPet</span>
+      </a>
+      <nav class="hidden sm:flex gap-6 text-sm">
+        <a href="/" class="hover:text-emerald-600">Accueil</a>
+        <span class="text-neutral-300">/</span>
+        <span class="font-medium">Livraison</span>
+      </nav>
+      <a href="/" class="text-sm px-3 py-1.5 rounded-lg border hover:bg-neutral-50">← Retour</a>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="container mx-auto px-4 py-10 max-w-3xl">
+    <h1 class="text-3xl font-bold mb-2">Informations de livraison</h1>
+    <p class="text-neutral-600 mb-6">
+      Renseignez vos coordonnées pour recevoir votre box. Les champs marqués d’un <span class="text-red-600">*</span> sont obligatoires.
+    </p>
+
+    <!-- Récap sélection (rempli via JS) -->
+    <div id="recap" class="hidden mb-8 rounded-2xl border p-6 bg-emerald-50 border-emerald-200">
+      <h2 class="text-lg font-semibold mb-2">Votre sélection</h2>
+      <ul class="text-sm text-emerald-900 space-y-1" id="recapList"></ul>
+    </div>
+
+    <!-- Alertes -->
+    <div id="alert-success" class="hidden mb-6 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 px-4 py-3">
+      ✅ Merci ! Votre demande a bien été envoyée. Nous vous confirmons la commande par e-mail.
+    </div>
+    <div id="alert-error" class="hidden mb-6 rounded-xl border border-red-200 bg-red-50 text-red-800 px-4 py-3">
+      ❌ Oups, l’envoi a échoué. Vérifiez vos infos et réessayez.
+    </div>
+
+    <!-- FORM: action+method pour fallback Formspree -->
+    <form id="livraisonForm" action="https://formspree.io/f/movpllak" method="POST" class="space-y-8">
+      <!-- Contact -->
+      <section class="rounded-2xl border p-6">
+        <h2 class="text-xl font-semibold mb-4">Coordonnées</h2>
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm mb-1" for="prenom">Prénom <span class="text-red-600">*</span></label>
+            <input id="prenom" name="prenom" required class="w-full rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div>
+            <label class="block text-sm mb-1" for="nom">Nom <span class="text-red-600">*</span></label>
+            <input id="nom" name="nom" required class="w-full rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-sm mb-1" for="email">E-mail <span class="text-red-600">*</span></label>
+            <input id="email" name="email" type="email" required class="w-full rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="vous@exemple.com" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-sm mb-1" for="tel">Téléphone</label>
+            <input id="tel" name="tel" type="tel" inputmode="tel" class="w-full rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="+33 6 12 34 56 78" />
+          </div>
+        </div>
+      </section>
+
+      <!-- Adresse -->
+      <section class="rounded-2xl border p-6">
+        <h2 class="text-xl font-semibold mb-4">Adresse de livraison</h2>
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div class="sm:col-span-2">
+            <label class="block text-sm mb-1" for="adresse">Adresse <span class="text-red-600">*</span></label>
+            <input id="adresse" name="adresse" required class="w-full rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="N°, rue" />
+          </div>
+          <div>
+            <label class="block text-sm mb-1" for="cp">Code postal <span class="text-red-600">*</span></label>
+            <input id="cp" name="cp" required pattern="\d{4,5}" class="w-full rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="75001" />
+            <p class="text-xs text-neutral-500 mt-1">4–5 chiffres.</p>
+          </div>
+          <div>
+            <label class="block text-sm mb-1" for="ville">Ville <span class="text-red-600">*</span></label>
+            <input id="ville" name="ville" required class="w-full rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div>
+            <label class="block text-sm mb-1" for="pays">Pays <span class="text-red-600">*</span></label>
+            <select id="pays" name="pays" required class="w-full rounded-xl border px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <option value="France" selected>France</option>
+              <option value="Belgique">Belgique</option>
+              <option value="Luxembourg">Luxembourg</option>
+              <option value="Suisse">Suisse</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- Options de livraison -->
+      <section class="rounded-2xl border p-6">
+        <h2 class="text-xl font-semibold mb-4">Options</h2>
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm mb-1" for="transporteur">Transporteur</label>
+            <select id="transporteur" name="transporteur" class="w-full rounded-xl border px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+              <option>Colissimo (2–3 j)</option>
+              <option>Chronopost (24h)</option>
+              <option>Mondial Relay (3–5 j)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm mb-1" for="instructions">Instructions de livraison</label>
+            <input id="instructions" name="instructions" placeholder="Code porte, étage, gardien…" class="w-full rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-sm mb-1" for="message">Message (optionnel)</label>
+            <textarea id="message" name="message" rows="4" class="w-full rounded-xl border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Besoin particulier, allergie, créneau préféré…"></textarea>
+          </div>
+        </div>
+        <div class="mt-4 flex items-start gap-2">
+          <input id="cgv" name="cgv" type="checkbox" required class="mt-1" />
+          <label for="cgv" class="text-sm">
+            J’accepte les <a href="#" class="underline text-emerald-700">CGV</a> et la
+            <a href="#" class="underline text-emerald-700">politique de confidentialité</a>.
+          </label>
+        </div>
+
+        <!-- Champs cachés pour reprendre les choix -->
+        <input type="hidden" id="f_espece"   name="espece" />
+        <input type="hidden" id="f_formule"  name="formule" />
+        <input type="hidden" id="f_taille"   name="taille" />
+        <input type="hidden" id="f_jouets"   name="jouets" />
+        <input type="hidden" id="f_bio"      name="bio" />
+        <input type="hidden" id="f_freq"     name="freq" />
+        <input type="hidden" id="f_litiere"  name="litiere" />
+        <input type="hidden" id="f_prix"     name="prix" />
+
+        <!-- honeypot anti-spam -->
+        <input type="text" name="_hp" id="hp" class="hidden" tabindex="-1" autocomplete="off" />
+      </section>
+
+      <!-- Récap (texte) -->
+      <section class="rounded-2xl border p-6">
+        <h2 class="text-xl font-semibold mb-4">Récapitulatif</h2>
+        <p class="text-sm text-neutral-600">
+          Vous pourrez ajuster le contenu et la fréquence depuis votre compte. La livraison standard est à
+          <strong>4,90 €</strong>, offerte dès <strong>49 €</strong> d’achat.
+        </p>
+      </section>
+
+      <!-- Actions -->
+      <div class="flex items-center gap-3">
+        <button type="submit" class="px-5 py-3 rounded-xl bg-emerald-600 text-white text-sm shadow hover:bg-emerald-700">
+          Valider la livraison
+        </button>
+        <a href="/" class="px-5 py-3 rounded-xl bg-neutral-100 text-sm hover:bg-neutral-200">Annuler</a>
+      </div>
+    </form>
+  </main>
+
+  <footer class="bg-gray-100 py-6 text-center text-gray-500 mt-16">
+    &copy; <script>document.write(new Date().getFullYear())</script> VitalPet — Tous droits réservés
+  </footer>
+
+  <!-- Remplissage du récap + hidden fields depuis l'URL -->
+  <script>
+    (function () {
+      const q = new URLSearchParams(location.search);
+      const hasAny = Array.from(q.keys()).length > 0;
+
+      const data = {
+        espece:  q.get("espece")  || "",
+        formule: q.get("formule") || "",
+        taille:  q.get("taille")  || "",
+        jouets:  q.get("jouets")  || "",
+        bio:     q.get("bio") === "1" ? "Oui" : (q.get("bio") === "0" ? "Non" : ""),
+        freq:    q.get("freq")    || "",
+        litiere: q.get("litiere") === "1" ? "Oui" : (q.get("litiere") === "0" ? "Non" : ""),
+        prix:    q.get("prix") ? q.get("prix") + " € / mois" : ""
+      };
+
+      const recap = document.getElementById("recap");
+      const list  = document.getElementById("recapList");
+      if (hasAny) {
+        list.innerHTML = `
+          <li><strong>Espèce :</strong> ${data.espece || "—"}</li>
+          <li><strong>Formule :</strong> ${data.formule || "—"}</li>
+          <li><strong>Taille :</strong> ${data.taille || "—"}</li>
+          <li><strong>Jouets / mois :</strong> ${data.jouets || "—"}</li>
+          <li><strong>Ingrédients bio/premium :</strong> ${data.bio || "—"}</li>
+          <li><strong>Fréquence :</strong> ${data.freq || "—"}</li>
+          <li><strong>Litière incluse :</strong> ${data.litiere || "—"}</li>
+          <li><strong>Prix indicatif :</strong> ${data.prix || "—"}</li>
+        `;
+        recap.classList.remove("hidden");
+      }
+
+      // push dans les champs cachés
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+      set("f_espece",  data.espece);
+      set("f_formule", data.formule);
+      set("f_taille",  data.taille);
+      set("f_jouets",  data.jouets);
+      set("f_bio",     data.bio);
+      set("f_freq",    data.freq);
+      set("f_litiere", data.litiere);
+      set("f_prix",    data.prix);
+    })();
+  </script>
+
+  <!-- Envoi AJAX + fallback vers POST classique si CORS/403 -->
+  <script>
+    (function () {
+      const form = document.getElementById("livraisonForm");
+      const ok   = document.getElementById("alert-success");
+      const ko   = document.getElementById("alert-error");
+
+      async function onSubmit(e) {
+        e.preventDefault();
+
+        if (document.getElementById("hp").value) return; // honeypot
+
+        if (!form.checkValidity()) {
+          form.reportValidity();
+          return;
+        }
+
+        const data = Object.fromEntries(new FormData(form).entries());
+
+        try {
+          const res = await fetch(form.action, {
+            method: "POST",
+            headers: { "Accept": "application/json", "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+
+          if (res.ok) {
+            ok.classList.remove("hidden");
+            ko.classList.add("hidden");
+            form.reset();
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          } else {
+            // fallback : laisser le navigateur poster le form
+            form.removeEventListener("submit", onSubmit);
+            form.submit();
+          }
+        } catch (err) {
+          form.removeEventListener("submit", onSubmit);
+          form.submit();
+        }
+      }
+
+      form.addEventListener("submit", onSubmit);
+    })();
+  </script>
+</body>
+</html>

@@ -1,3 +1,37 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent; /* retire le flash bleu sur iOS */
+  }
+  body {
+    @apply text-neutral-900 bg-white antialiased;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Scrollbars masquées pour les barres horizontales */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Tap + inputs plus “tactiles” */
+button, a, select, input {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* ===== Safe areas & barres collées ===== */
+:root { --nav-h: 56px; }               /* Hauteur de la TopNav */
+.pt-safe { padding-top: env(safe-area-inset-top); }  /* coussin sous l’encoche */
+.safe-page {
+  padding-top: calc(var(--nav-h) + env(safe-area-inset-top));
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Laisse de la place à la tab-bar mobile (MobileTabs) */
+@media (max-width: 767px) {
+  body { padding-bottom: max(env(safe-area-inset-bottom, 0px), 64px); }
+}
