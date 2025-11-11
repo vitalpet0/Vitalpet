@@ -2,9 +2,22 @@
 <html lang="fr">
   <head>
     <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>VitalPet</title>
-<link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+
+    <!-- Perf: amorce DNS/TLS vers l’hébergeur d’images -->
+    <link rel="preconnect" href="https://i.ibb.co" crossorigin />
+    <link rel="dns-prefetch" href="https://i.ibb.co" />
+
+    <!-- Perf: précharge l’image du hero (chat) affichée au-dessus de la ligne de flottaison -->
+    <link
+      rel="preload"
+      as="image"
+      href="https://i.ibb.co/ns8RgZtn/chat-siberien.jpg"
+      imagesrcset="https://i.ibb.co/ns8RgZtn/chat-siberien.jpg 1600w"
+      imagesizes="100vw"
+    />
   </head>
   <body class="bg-white">
     <div id="root"></div>

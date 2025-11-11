@@ -1,17 +1,83 @@
 // src/pages/BoxHome.jsx
-import React, { useMemo, useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import React, { useMemo, useState, useEffect, useRef } from "react";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import TopNav from "../components/TopNav.jsx";
+import { useCart } from "../context/CartContext.jsx";
+// URL directe vers l'image iBB
+const BOX_IMG_URL = "https://i.ibb.co/PsBfTg75/Chat-GPT-Image-10-nov-2025-21-10-12.png";
+
+
+/* -------- Perf wrapper: rend la section seulement quand visible -------- */
+function Defer({ as: Tag = "section", size = "1200px 900px", className = "", style, children, ...rest }) {
+  return (
+    <Tag
+      className={className}
+      style={{
+        contentVisibility: "auto",
+        containIntrinsicSize: size,
+        ...style,
+      }}
+      {...rest}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+// Reveal au scroll (respecte prefers-reduced-motion)
+function Reveal({ as: Tag = "div", delay = 0, className = "", children }) {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const reduce =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { setVisible(true); return; }
+
+    const el = ref.current;
+    if (!el) return;
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            setTimeout(() => setVisible(true), delay);
+            io.unobserve(el);
+          }
+        });
+      },
+      { rootMargin: "0px 0px -10% 0px", threshold: 0.1 }
+    );
+
+    io.observe(el);
+    return () => io.disconnect();
+  }, [delay]);
+
+  return (
+    <Tag
+      ref={ref}
+      className={
+        className +
+        " transition-all duration-700 ease-out will-change-transform" +
+        (visible ? " opacity-100 translate-y-0" : " opacity-0 translate-y-4")
+      }
+    >
+      {children}
+    </Tag>
+  );
+}
 
 /* ----------------- Données ----------------- */
 const PLANS = {
   chat: {
-    Basic: { base: 19, features: ["Croquettes + friandises + pâtée", "Litière", "1 jouet offert au choix"] },
+    Basic:   { base: 19, features: ["Croquettes + friandises + pâtée", "Litière", "1 jouet offert au choix"] },
     Confort: { base: 32, features: ["Tout en Basic", "Herbes à chat", "Hygiène (lingettes, spray, désodorisant)", "Brosse/peigne"] },
     Premium: { base: 49, features: ["Tout en Confort", "Compléments alimentaires", "Accessoire premium offert"] },
   },
   chien: {
-    Basic: { base: 19, features: ["Croquettes + friandises + pâtée", "Sacs à déjections", "1 jouet offert au choix"] },
+    Basic:   { base: 19, features: ["Croquettes + friandises + pâtée", "Sacs à déjections", "1 jouet offert au choix"] },
     Confort: { base: 32, features: ["Tout en Basic", "Os à mâcher", "Hygiène (shampoing, lingettes)", "Brosse/peigne"] },
     Premium: { base: 49, features: ["Tout en Confort", "Tapis absorbant", "Compléments alimentaires", "Accessoire premium offert"] },
   },
@@ -45,6 +111,7 @@ function SafeImg({ src, alt, className, style }) {
       style={style}
       onError={() => setError(true)}
       loading="lazy"
+      decoding="async"
     />
   );
 }
@@ -52,13 +119,16 @@ function SafeImg({ src, alt, className, style }) {
 /* ----------------- Page ----------------- */
 export default function BoxHome() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { add } = useCart(); // on n’utilise plus setCurrency / setShipping ici
+
   const [species, setSpecies] = useState("chat");
   const [tier, setTier] = useState("Confort");
   const [size, setSize] = useState("M");
   const [nbJouets, setNbJouets] = useState(1);
   const [litiereIncluse, setLitiereIncluse] = useState(true);
   const [bio, setBio] = useState(false);
-  const [livraison, setLivraison] = useState("mensuelle");
+  const [livraison, setLivraison] = useState("mensuelle"); // + "trimestrielle"
 
   /* ---------- Persistance: charger depuis localStorage ---------- */
   useEffect(() => {
@@ -74,7 +144,8 @@ export default function BoxHome() {
     } catch {}
   }, []);
 
-  /* ---------- Prix ---------- */
+  /* ---------- Prix (HT) ---------- */
+  // On traite ce prix comme un prix HT pour l’intégration Sellsy.
   const price = useMemo(() => {
     const base = PLANS[species][tier].base;
     const sizePlus =
@@ -82,7 +153,9 @@ export default function BoxHome() {
     const litiere = species === "chat" && litiereIncluse ? 4 : 0;
     const jouets = Math.max(0, nbJouets - 1) * 3;
     const bioPlus = bio ? (tier === "Premium" ? 6 : 3) : 0;
-    const freq = livraison === "bimestrielle" ? -4 : 0;
+    // Ajustement fréquence : mensuelle = 0, trimestrielle = -6
+    const freq =
+      livraison === "trimestrielle" ? -6 : 0;
     return Math.max(9, base + sizePlus + litiere + jouets + bioPlus + freq);
   }, [species, tier, size, litiereIncluse, nbJouets, bio, livraison]);
 
@@ -91,12 +164,15 @@ export default function BoxHome() {
     try {
       localStorage.setItem(
         "vp_config",
-        JSON.stringify({ espece: species, formule: tier, taille: size, jouets: nbJouets, litiere: litiereIncluse, bio, freq: livraison, prix: price })
+        JSON.stringify({
+          espece: species, formule: tier, taille: size, jouets: nbJouets,
+          litiere: litiereIncluse, bio, freq: livraison, prix: price
+        })
       );
     } catch {}
   }, [species, tier, size, nbJouets, litiereIncluse, bio, livraison, price]);
 
-  /* ---------- Querystring pour /checkout ---------- */
+  /* ---------- Paramètres pour /checkout (optionnel) ---------- */
   const params = useMemo(() => {
     const p = new URLSearchParams({
       espece: species, formule: tier, taille: size, jouets: String(nbJouets),
@@ -106,7 +182,102 @@ export default function BoxHome() {
     return p.toString();
   }, [species, tier, size, nbJouets, bio, livraison, price, litiereIncluse]);
 
-  const goCheckout = () => navigate(`/checkout?${params}`);
+  /* ---------- Helpers Panier / Checkout bridge ---------- */
+  const DEFAULT_VAT = 20;
+  const CURRENCY = "EUR";
+
+  function buildBoxProduct() {
+    const idParts = [
+      "box",
+      species,
+      tier.toLowerCase(),
+      size,
+      bio ? "bio" : "std",
+      species === "chat" ? (litiereIncluse ? "lit" : "nol") : "nlit",
+      `j${nbJouets}`,
+      livraison === "trimestrielle" ? "tri" : "mens",
+    ];
+    const id = idParts.join("-");
+
+    const name =
+      `Box ${species === "chat" ? "Chat" : "Chien"} — ${tier} (${size})` +
+      (bio ? " • Bio" : "") +
+      (species === "chat" && litiereIncluse ? " • Litière" : "") +
+      (livraison === "trimestrielle" ? " • Trimestriel" : " • Mensuel");
+
+    return {
+      id,
+      name,
+      // NOTE: CartContext attend "price" pour le sous-total affiché
+      price: Number(price) || 0, // on affiche le HT ici
+      img: BOX_IMG_URL,
+      qty: 1,
+      // méta (non obligatoire)
+      brand: undefined,
+      meta: { species, tier, size, nbJouets, litiereIncluse: species === "chat" ? litiereIncluse : false, bio, livraison },
+    };
+  }
+
+  // Ce que Checkout.jsx attend dans localStorage ("cart" + "checkoutShipping" + "currency")
+  function buildCheckoutPayload() {
+    return [{
+      id: buildBoxProduct().id,
+      sku: buildBoxProduct().id,
+      title: buildBoxProduct().name,
+      quantity: 1,
+      priceHT: Number(price) || 0,
+      vat: DEFAULT_VAT,
+    }];
+  }
+
+  function persistForCheckout() {
+    try {
+      // panier pour Checkout
+      localStorage.setItem("cart", JSON.stringify(buildCheckoutPayload()));
+      // frais de port (HT)
+      localStorage.setItem("checkoutShipping", JSON.stringify({
+        label: "Livraison standard",
+        amount: 4.9,
+        taxRate: DEFAULT_VAT,
+      }));
+      // devise
+      localStorage.setItem("currency", CURRENCY);
+    } catch {}
+  }
+
+  // Ajoute la box au panier (context + persistance Checkout)
+  const addToCart = () => {
+    add(buildBoxProduct(), 1); // pour le badge + page Panier
+    persistForCheckout();       // pour un accès direct /checkout
+  };
+
+  // Continuer → ajoute + navigue
+  const goCheckout = () => {
+    addToCart();
+    navigate(`/checkout?${params}`);
+  };
+  // Ajoute la box puis ouvre la page Panier
+const goCart = () => {
+  addToCart();
+  navigate("/cart");
+};
+
+
+  /* ---------- Scroll helpers ---------- */
+  const scrollToId = (id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.history.replaceState(null, "", `#${id}`);
+    }
+  };
+
+  useEffect(() => {
+    if (location.hash) {
+      const id = location.hash.slice(1);
+      setTimeout(() => scrollToId(id), 0);
+    }
+  }, [location.hash]);
 
   /* ----------------- Images ----------------- */
   const LITIERE_CUSTOM_URL = "https://i.ibb.co/LhbT8pfj/10683012.webp";
@@ -118,45 +289,75 @@ export default function BoxHome() {
   const dogAccessory = "https://i.ibb.co/RTwDkXLT/accessoires-chien1.webp";
 
   return (
-    // ✅ safe-page ajoute un padding-top calculé (nav fixe + notch)
-    <div className="safe-page min-h-screen bg-gradient-to-b from-emerald-50 via-white to-white text-neutral-900">
+    <div className="pt-safe has-bottom-nav min-h-screen-fix min-h-screen-ios bg-gradient-to-b from-emerald-50 via-white to-white text-neutral-900">
       <TopNav />
 
-      {/* Hero */}
-      <header className="relative overflow-hidden">
-        <SafeImg
+      {/* --- HERO --- */}
+      <header className="relative">
+        <img
           src={heroImg}
-          alt="Animal heureux"
-          className="w-full h-[42vh] md:h-[52vh] lg:h-[58vh] object-cover"
-          style={species === "chat" ? { objectPosition: "center 35%" } : { objectPosition: "center 30%" }}
+          alt="Box VitalPet"
+          width={1600}
+          height={900}
+          className="w-full h-[52svh] md:h-[60vh] lg:h-[60vh] object-cover"
+          decoding="async"
+          sizes="100vw"
+          fetchpriority="high"
+          style={{ objectPosition: "center 40%" }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
-        <div className="absolute inset-0 flex items-end md:items-center">
-          <div className="max-w-7xl mx-auto px-4 py-8 md:py-0">
-            <div className="max-w-xl text-white drop-shadow">
-              <div className="inline-flex items-center gap-2 text-xs bg-white/20 backdrop-blur px-3 py-1.5 rounded-full mb-4">
-                <span>Livraison auto</span><span className="opacity-70">•</span><span>Box personnalisée</span><span className="opacity-70">•</span><span>Programme fidélité</span>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/35 to-transparent pointer-events-none" />
+        <div className="absolute inset-0 grid place-content-center">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 translate-y-[4vh]">
+            <Reveal className="max-w-[38rem] text-white text-center drop-shadow">
+              <div className="inline-flex items-center gap-1 text-[11px] bg-black/25 backdrop-blur-sm px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full mb-2 sm:mb-3">
+                <span>Box VitalPet</span>
+                <span className="opacity-70">•</span>
+                <span>Livraison automatique</span>
               </div>
-              <h1 className="text-4xl md:text-5xl font-semibold leading-tight">La box mensuelle qui suit les besoins de votre compagnon</h1>
-              <p className="mt-3 text-white/90">Croquettes, friandises, litière, jouets… Tout arrive automatiquement selon l’âge, le poids et les préférences.</p>
-              <div className="mt-6 flex flex-wrap gap-3" id="commencer">
-                <a href="#personnalisation" className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-sm font-medium">Je personnalise</a>
-                <a href="#plans" className="px-5 py-3 rounded-xl bg-white/90 text-neutral-900 text-sm font-medium hover:bg-white">Voir les formules</a>
-                <Link to={`/checkout?${params}`} className="px-5 py-3 rounded-xl bg-white/90 text-neutral-900 text-sm font-medium hover:bg-white">Livraison</Link>
+              <h1 className="text-2xl sm:text-3xl md:text-5xl lg:text-6xl font-semibold leading-tight">
+                Votre box sur mesure pour votre compagnon
+              </h1>
+              <p className="mt-2 sm:mt-3 text-white/90 text-[13px] sm:text-sm md:text-base">
+                Croquettes, friandises, jouets… livrés automatiquement selon ses besoins.
+              </p>
+              <div className="mt-4 sm:mt-5 flex flex-wrap justify-center gap-2">
+                <a
+                  href="#personnalisation"
+                  onClick={(e) => { e.preventDefault(); scrollToId("personnalisation"); }}
+                  className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-[13px] sm:text-sm font-medium"
+                >
+                  Je personnalise
+                </a>
+                <a
+                  href="#plans"
+                  onClick={(e) => { e.preventDefault(); scrollToId("plans"); }}
+                  className="px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-white/90 text-neutral-900 text-[13px] sm:text-sm font-medium hover:bg-white"
+                >
+                  Voir les formules
+                </a>
+                <Link
+                  to="/livraison"
+                  className="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg bg-white/15 text-white border border-white/25 text-[11px] sm:text-xs font-medium hover:bg-white/20"
+                >
+                  Livraison
+                </Link>
               </div>
-            </div>
+            </Reveal>
           </div>
         </div>
       </header>
 
       {/* Switch species */}
-      <section className="max-w-7xl mx-auto px-4 py-8 md:py-10">
-        <div className="flex items-center justify-center gap-2 bg-neutral-100 rounded-2xl p-1 w-fit mx-auto">
+      <section className="max-w-7xl mx-auto px-4 py-6 sm:py-8 md:py-10">
+        <div className="flex items-center justify-center gap-1.5 sm:gap-2 bg-neutral-100 rounded-2xl p-1 w-fit mx-auto">
           {["chat", "chien"].map((s) => (
             <button
               key={s}
               onClick={() => setSpecies(s)}
-              className={cx("px-4 py-2 rounded-xl text-sm transition", species === s ? "bg-white shadow font-medium" : "text-neutral-600 hover:text-neutral-900")}
+              className={cx(
+                "px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-[13px] sm:text-sm transition",
+                species === s ? "bg-white shadow font-medium" : "text-neutral-600 hover:text-neutral-900"
+              )}
             >
               {s === "chat" ? "Je suis un humain de chat" : "Je suis un humain de chien"}
             </button>
@@ -165,7 +366,13 @@ export default function BoxHome() {
       </section>
 
       {/* Plans */}
-      <section id="plans" className="max-w-7xl mx-auto px-4 pb-6">
+      <Defer
+        as="section"
+        id="plans"
+        className="max-w-7xl mx-auto px-4 pb-6"
+        size="1200px 1100px"
+        style={{ scrollMarginTop: 80 }}
+      >
         <SectionTitle
           kicker="Formules"
           title={species === "chat" ? "Pour les chats" : "Pour les chiens"}
@@ -179,20 +386,20 @@ export default function BoxHome() {
               <div
                 key={name}
                 className={cx(
-                  "rounded-2xl border p-6 bg-white relative transition-transform duration-300",
+                  "rounded-2xl border p-5 sm:p-6 bg-white relative transition-transform duration-300",
                   "hover:-translate-y-1 hover:shadow-lg",
                   isPopular && "ring-2 ring-emerald-500"
                 )}
               >
                 {isPopular && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs bg-emerald-600 text-white px-3 py-1 rounded-full shadow">Populaire</span>
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[11px] sm:text-xs bg-emerald-600 text-white px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full shadow">Populaire</span>
                 )}
-                <h3 className="text-lg font-semibold">{name}</h3>
-                <p className="mt-1 text-sm text-neutral-600">À partir de</p>
-                <div className="mt-1 text-3xl font-bold">
-                  {plan.base}€<span className="text-base font-normal text-neutral-500">/mois</span>
+                <h3 className="text-base sm:text-lg font-semibold">{name}</h3>
+                <p className="mt-1 text-xs sm:text-sm text-neutral-600">À partir de</p>
+                <div className="mt-1 text-2xl sm:text-3xl font-bold">
+                  {plan.base}€<span className="text-sm sm:text-base font-normal text-neutral-500">/mois</span>
                 </div>
-                <ul className="mt-4 space-y-2 text-sm text-neutral-700">
+                <ul className="mt-3 sm:mt-4 space-y-2 text-sm text-neutral-700">
                   {plan.features.map((f) => (
                     <li key={f} className="flex gap-2">
                       <span className="mt-1 w-1.5 h-1.5 rounded-full bg-emerald-500" /> {f}
@@ -201,7 +408,10 @@ export default function BoxHome() {
                 </ul>
                 <button
                   onClick={() => setTier(name)}
-                  className={cx("mt-6 w-full px-4 py-2 rounded-xl text-sm transition", tier === name ? "bg-emerald-600 text-white" : "bg-neutral-100 hover:bg-neutral-200")}
+                  className={cx(
+                    "mt-5 sm:mt-6 w-full px-3 py-2 rounded-xl text-sm transition",
+                    tier === name ? "bg-emerald-600 text-white" : "bg-neutral-100 hover:bg-neutral-200"
+                  )}
                 >
                   {tier === name ? "Sélectionné" : "Choisir"}
                 </button>
@@ -209,15 +419,25 @@ export default function BoxHome() {
             );
           })}
         </div>
-      </section>
+      </Defer>
 
       {/* Personnalisation */}
-      <section id="personnalisation" className="max-w-7xl mx-auto px-4 py-10">
-        <SectionTitle kicker="Personnalisation" title="Composez en 3 gestes" subtitle="Espèce → Taille → Options. Le reste peut être ajusté plus tard depuis votre compte." />
-        <div className="grid lg:grid-cols-2 gap-8 mt-8 items-start">
+      <Defer
+        as="section"
+        id="personnalisation"
+        className="max-w-7xl mx-auto px-4 py-8 sm:py-10"
+        size="1200px 1200px"
+        style={{ scrollMarginTop: 80 }}
+      >
+        <SectionTitle
+          kicker="Personnalisation"
+          title="Composez en 3 gestes"
+          subtitle="Espèce → Taille → Options. Le reste peut être ajusté plus tard depuis votre compte."
+        />
+        <div className="grid lg:grid-cols-2 gap-6 sm:gap-8 mt-6 sm:mt-8 items-start">
           {/* Carte options */}
-          <div className="rounded-2xl border bg-white p-6">
-            <div className="space-y-6">
+          <div className="rounded-2xl border bg-white p-5 sm:p-6">
+            <div className="space-y-5 sm:space-y-6">
               <div>
                 <p className="text-sm font-medium mb-2">Formule</p>
                 <div className="grid grid-cols-3 gap-2">
@@ -232,6 +452,7 @@ export default function BoxHome() {
                   ))}
                 </div>
               </div>
+
               <div>
                 <p className="text-sm font-medium mb-2">Taille de l'animal</p>
                 <div className="flex gap-2">
@@ -251,6 +472,7 @@ export default function BoxHome() {
                 </div>
                 <p className="text-xs text-neutral-500 mt-1">Indicatif : S (≤4 kg chat / ≤10 kg chien), M (5–8 kg / 11–25 kg), L (≥9 kg / ≥26 kg).</p>
               </div>
+
               <div>
                 <p className="text-sm font-medium mb-2">Options</p>
                 <div className="grid sm:grid-cols-3 gap-2">
@@ -281,39 +503,63 @@ export default function BoxHome() {
                   </button>
                 </div>
               </div>
+
+              {/* Fréquence avec bouton Trimestriel */}
               <div>
                 <p className="text-sm font-medium mb-2">Fréquence</p>
                 <div className="flex gap-2">
-                  {[["mensuelle", "Chaque mois"]].map(([v, label]) => (
+                  {[
+                    ["mensuelle", "Chaque mois"],
+                    ["trimestrielle", "Trimestriel (tous les 3 mois)"],
+                  ].map(([v, label]) => (
                     <button
                       key={v}
                       onClick={() => setLivraison(v)}
-                      className={cx("px-3 py-2 rounded-xl border text-sm transition", livraison === v ? "border-emerald-500 bg-emerald-50" : "border-neutral-200 hover:bg-neutral-50")}
+                      className={cx(
+                        "px-3 py-2 rounded-xl border text-sm transition",
+                        livraison === v ? "border-emerald-500 bg-emerald-50" : "border-neutral-200 hover:bg-neutral-50"
+                      )}
                     >
                       {label}
                     </button>
                   ))}
                 </div>
               </div>
-              <div className="p-4 bg-neutral-50 rounded-xl border">
+
+              <div className="p-3 sm:p-4 bg-neutral-50 rounded-xl border">
                 <p className="text-sm text-neutral-600">Prix indicatif*</p>
-                <div className="text-3xl font-semibold mt-1">
-                  {price}€<span className="text-base font-normal text-neutral-500">/mois</span>
+                <div className="text-2xl sm:text-3xl font-semibold mt-1">
+                  {price}€<span className="text-sm sm:text-base font-normal text-neutral-500">/mois</span>
                 </div>
                 <p className="text-xs text-neutral-500 mt-1">*Calculé selon la formule, la taille et vos options. Ajustable plus tard.</p>
               </div>
 
-              {/* Actions */}
+              {/* Actions – boutons plus compacts sur mobile */}
               <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={goCheckout}
-                  className="px-5 py-3 rounded-xl bg-emerald-600 text-white text-sm shadow hover:bg-emerald-700"
-                >
-                  Continuer
-                </button>
-                <a href="#faq" className="px-5 py-3 rounded-xl bg-neutral-100 text-sm hover:bg-neutral-200">Questions</a>
-              </div>
+  <button
+    type="button"
+    onClick={addToCart}
+    className="px-4 py-2 rounded-xl bg-neutral-100 text-sm hover:bg-neutral-200"
+  >
+    Ajouter au panier
+  </button>
+
+  <button
+    type="button"
+    onClick={goCart}
+    className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm shadow hover:bg-emerald-700"
+  >
+    Continuer au panier
+  </button>
+
+  <a
+    href="#faq"
+    className="px-4 py-2 rounded-xl bg-neutral-100 text-sm hover:bg-neutral-200"
+  >
+    Questions
+  </a>
+</div>
+
             </div>
           </div>
 
@@ -352,10 +598,10 @@ export default function BoxHome() {
             )}
           </div>
         </div>
-      </section>
+      </Defer>
 
       {/* Bandeau fidélité */}
-      <section className="max-w-7xl mx-auto px-4 pb-10">
+      <Defer as="section" className="max-w-7xl mx-auto px-4 pb-10" size="1200px 300px">
         <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-6">
           <div className="grid md:grid-cols-3 gap-6 items-center">
             <div className="md:col-span-2">
@@ -365,10 +611,10 @@ export default function BoxHome() {
             <a href="#" className="justify-self-start md:justify-self-end px-5 py-3 rounded-xl bg-white/10 border border-white/20 hover:bg-white/20 text-sm">En savoir plus</a>
           </div>
         </div>
-      </section>
+      </Defer>
 
       {/* FAQ */}
-      <section id="faq" className="max-w-7xl mx-auto px-4 py-10">
+      <Defer as="section" id="faq" className="max-w-7xl mx-auto px-4 py-10" size="1200px 900px">
         <SectionTitle kicker="FAQ" title="Questions fréquentes" />
         <div className="mt-6 grid md:grid-cols-2 gap-6">
           {[
@@ -386,7 +632,7 @@ export default function BoxHome() {
             </details>
           ))}
         </div>
-      </section>
+      </Defer>
 
       {/* Footer */}
       <footer className="border-t bg-white">

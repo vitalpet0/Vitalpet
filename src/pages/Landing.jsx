@@ -1,10 +1,64 @@
 // src/pages/Landing.jsx
-import React, { useMemo, useState, useEffect } from "react";
+import React, {
+  useMemo,
+  useState,
+  useEffect,
+  useRef,
+  useDeferredValue,
+  startTransition,
+} from "react";
 import { Link } from "react-router-dom";
 import TopNav from "../components/TopNav.jsx";
 import { useCart } from "../context/CartContext.jsx";
 import PRODUCTS from "../data/products.js";
 import CartToast from "../components/CartToast.jsx";
+import { prefetchRoutesIdle, prefetchRoute } from "../utils/prefetchRoutes.js";
+
+/* ---------- Reveal au scroll (respecte prefers-reduced-motion) ---------- */
+function Reveal({ as: Tag = "div", delay = 0, className = "", children }) {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const reduce =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      setVisible(true);
+      return;
+    }
+
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            setTimeout(() => setVisible(true), delay);
+            io.unobserve(el);
+          }
+        });
+      },
+      { rootMargin: "0px 0px -10% 0px", threshold: 0.1 }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [delay]);
+
+  return (
+    <Tag
+      ref={ref}
+      className={
+        className +
+        " transition-all duration-700 ease-out will-change-transform" +
+        (visible ? " opacity-100 translate-y-0" : " opacity-0 translate-y-4")
+      }
+    >
+      {children}
+    </Tag>
+  );
+}
 
 /* ---------- Utilitaires d'affichage ---------- */
 const PLACEHOLDER_IMG =
@@ -17,7 +71,7 @@ const PLACEHOLDER_IMG =
     </svg>`
   );
 
-function SafeImg({ src, alt, className, sizes }) {
+function SafeImg({ src, alt, className, sizes, fetchPriority = "auto" }) {
   const [err, setErr] = useState(false);
   return (
     <img
@@ -25,6 +79,8 @@ function SafeImg({ src, alt, className, sizes }) {
       alt={alt || "Produit"}
       className={className}
       loading="lazy"
+      decoding="async"
+      fetchpriority={fetchPriority}
       sizes={sizes || "(min-width:1024px) 20vw, (min-width:768px) 25vw, 50vw"}
       onError={() => setErr(true)}
     />
@@ -49,15 +105,24 @@ function SkeletonCard() {
 }
 
 /* ---------- Carte produit (image + titre cliquables) ---------- */
-function Card({ p, onAdd }) {
+const Card = React.memo(function Card({ p, onAdd }) {
   const hasPrice = typeof p.price === "number" && !Number.isNaN(p.price);
   const petLabel = p.pet === "chat" ? "Chat" : p.pet === "chien" ? "Chien" : "—";
 
   return (
-    <div className="rounded-2xl border bg-white overflow-hidden flex flex-col">
+    <div
+      className="rounded-2xl border bg-white overflow-hidden flex flex-col"
+      onMouseEnter={() => prefetchRoute("/product/:id")}
+      onTouchStart={() => prefetchRoute("/product/:id")}
+    >
       <Link to={`/product/${p.id}`} aria-label={`Voir ${p.name}`}>
         <div className="aspect-[4/3] w-full overflow-hidden">
-          <SafeImg src={p.img} alt={p.name} className="w-full h-full object-cover" />
+          <SafeImg
+            src={p.img}
+            alt={p.name}
+            className="w-full h-full object-cover"
+            sizes="(min-width:1280px) 18vw, (min-width:1024px) 22vw, (min-width:768px) 30vw, 45vw"
+          />
         </div>
       </Link>
 
@@ -97,7 +162,7 @@ function Card({ p, onAdd }) {
       </div>
     </div>
   );
-}
+});
 
 export default function Landing() {
   const { add, items, count } = useCart();
@@ -132,6 +197,20 @@ export default function Landing() {
     };
   }, []);
 
+  /* ---------- Prefetch des pages probables depuis le landing ---------- */
+  useEffect(() => {
+    prefetchRoutesIdle(["/product/:id", "/cart", "/box"]);
+  }, []);
+
+  /* ---------- Scroll helper pour #produits ---------- */
+  const scrollToId = (id) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      window.history.replaceState(null, "", `#${id}`);
+    }
+  };
+
   /* ---------- Compteur du panier ---------- */
   const cartCount = useMemo(() => {
     if (typeof count === "number") return count;
@@ -153,6 +232,14 @@ export default function Landing() {
   const [age, setAge] = useState("all");
   const [sort, setSort] = useState("none");
 
+  // Valeurs différées pour fluidifier l'UI durant les gros filtrages
+  const dQ = useDeferredValue(q);
+  const dPet = useDeferredValue(pet);
+  const dCat = useDeferredValue(cat);
+  const dBrand = useDeferredValue(brand);
+  const dAge = useDeferredValue(age);
+  const dSort = useDeferredValue(sort);
+
   const cats = useMemo(
     () => ["all", ...Array.from(new Set(PRODUCTS.map((p) => p.cat).filter(Boolean)))],
     []
@@ -167,27 +254,30 @@ export default function Landing() {
   );
 
   const filtered = useMemo(() => {
-    const ql = q.trim().toLowerCase();
+    const ql = dQ.trim().toLowerCase();
     return PRODUCTS.filter((p) => {
-      const okPet = pet === "all" || p.pet === pet;
-      const okCat = cat === "all" || p.cat === cat;
-      const okBrand = brand === "all" || p.brand === brand;
-      const okAge = age === "all" || p.age === age;
+      const okPet = dPet === "all" || p.pet === dPet;
+      const okCat = dCat === "all" || p.cat === dCat;
+      const okBrand = dBrand === "all" || p.brand === dBrand;
+      const okAge = dAge === "all" || p.age === dAge;
       const matchQuery =
         ql === "" ||
         (p.name && p.name.toLowerCase().includes(ql)) ||
         (p.brand && p.brand.toLowerCase().includes(ql));
       return okPet && okCat && okBrand && okAge && matchQuery;
     });
-  }, [q, pet, cat, brand, age]);
+  }, [dQ, dPet, dCat, dBrand, dAge]);
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
-    if (sort === "price-asc") arr.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
-    if (sort === "price-desc") arr.sort((a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity));
-    if (sort === "name-asc") arr.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    if (dSort === "price-asc")
+      arr.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
+    if (dSort === "price-desc")
+      arr.sort((a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity));
+    if (dSort === "name-asc")
+      arr.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     return arr;
-  }, [filtered, sort]);
+  }, [filtered, dSort]);
 
   const [loading, setLoading] = useState(true);
   useEffect(() => {
@@ -199,73 +289,105 @@ export default function Landing() {
     add(p, 1);
     setLastLabel(p?.name || "Produit");
     setToastOpen(true);
+    prefetchRoute("/cart");
   };
 
   return (
-    <div className="safe-page min-h-screen bg-gradient-to-b from-emerald-50 via-white to-white">
+    <div className="pt-safe has-bottom-nav min-h-screen-fix min-h-screen-ios bg-gradient-to-b from-emerald-50 via-white to-white">
       <TopNav />
 
-      {/* --- HERO boutique (comme la page Box) --- */}
-      <header className="relative overflow-hidden">
+      {/* --- HERO boutique --- */}
+      <header className="relative">
         <img
           src="/img/croquettes.jpg"
           alt="Croquettes VitalPet"
-          className="w-full h-[38vh] md:h-[50vh] lg:h-[56vh] object-cover"
+          width={1600}
+          height={900}
+          className="w-full h-[52svh] md:h-[60vh] lg:h-[60vh] object-cover"
+          decoding="async"
+          sizes="100vw"
+          fetchpriority="high"
           style={{ objectPosition: "center 40%" }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/25 to-transparent" />
-        <div className="absolute inset-0 flex items-end md:items-center">
-          <div className="max-w-7xl mx-auto px-4 py-10 md:py-0">
-            <div className="max-w-2xl text-white drop-shadow">
-              <div className="inline-flex items-center gap-2 text-xs bg-white/20 backdrop-blur px-3 py-1.5 rounded-full mb-4">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/35 to-transparent pointer-events-none" />
+        <div className="absolute inset-0 grid place-content-center">
+          <div className="max-w-7xl mx-auto px-6 translate-y-[4vh]">
+            <Reveal className="max-w-[38rem] text-white text-center drop-shadow">
+              <div className="inline-flex items-center gap-1 text-[11px] bg-black/25 backdrop-blur-sm px-2.5 py-1 rounded-full mb-3">
                 <span>Croquettes & friandises</span>
                 <span className="opacity-70">•</span>
                 <span>Accessoires</span>
                 <span className="opacity-70">•</span>
                 <span>Livraison rapide</span>
               </div>
-              <h1 className="text-4xl md:text-5xl font-semibold leading-tight">
+              <h1 className="text-3xl md:text-5xl lg:text-6xl font-semibold leading-tight">
                 La boutique essentielle pour votre compagnon
               </h1>
-              <p className="mt-3 text-white/90">
+              <p className="mt-3 text-white/90 text-sm md:text-base">
                 Alimentation, litière, hygiène et jeux — tout ce qu’il faut, au bon prix.
               </p>
-              <div className="mt-6 flex flex-wrap gap-3">
+              <div className="mt-5 flex flex-wrap justify-center gap-2">
                 <a
                   href="#produits"
-                  className="px-5 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-sm font-medium"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    scrollToId("produits");
+                  }}
+                  className="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-sm font-medium"
                 >
                   Parcourir les produits
                 </a>
                 <Link
                   to="/box"
-                  className="px-5 py-3 rounded-xl bg-white/90 text-neutral-900 text-sm font-medium hover:bg-white"
+                  onMouseEnter={() => prefetchRoute("/box")}
+                  onTouchStart={() => prefetchRoute("/box")}
+                  className="px-4 py-2 rounded-lg bg-white/90 text-neutral-900 text-sm font-medium hover:bg-white"
                 >
                   Découvrir nos box
                 </Link>
               </div>
-            </div>
+            </Reveal>
           </div>
         </div>
       </header>
 
       {/* --- Filtres --- */}
-      <section className="max-w-7xl mx-auto px-4 pt-6">
+      <Reveal as="section" className="max-w-7xl mx-auto px-4 pt-6">
         {/* Mobile (≤ lg) */}
         <div className="-mx-4 px-4 lg:hidden">
-          <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar scroller">
             <input
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                startTransition(() => setQ(v));
+              }}
               placeholder="Rechercher…"
               className="flex-[1_0_60%] min-w-[60%] px-3 py-2 rounded-xl border"
+              inputMode="search"
+              enterKeyHint="search"
+              autoComplete="off"
             />
-            <select value={pet} onChange={(e) => setPet(e.target.value)} className="px-3 py-2 rounded-xl border">
+            <select
+              value={pet}
+              onChange={(e) => {
+                const v = e.target.value;
+                startTransition(() => setPet(v));
+              }}
+              className="px-3 py-2 rounded-xl border"
+            >
               <option value="all">Tous</option>
               <option value="chat">Chat</option>
               <option value="chien">Chien</option>
             </select>
-            <select value={cat} onChange={(e) => setCat(e.target.value)} className="px-3 py-2 rounded-xl border">
+            <select
+              value={cat}
+              onChange={(e) => {
+                const v = e.target.value;
+                startTransition(() => setCat(v));
+              }}
+              className="px-3 py-2 rounded-xl border"
+            >
               {cats.map((c) => (
                 <option key={c} value={c}>
                   {c === "all" ? "Catégories" : c}
@@ -274,22 +396,43 @@ export default function Landing() {
             </select>
           </div>
 
-          <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar">
-            <select value={brand} onChange={(e) => setBrand(e.target.value)} className="px-3 py-1.5 rounded-full border text-sm">
+          <div className="mt-2 flex gap-2 overflow-x-auto no-scrollbar scroller">
+            <select
+              value={brand}
+              onChange={(e) => {
+                const v = e.target.value;
+                startTransition(() => setBrand(v));
+              }}
+              className="px-3 py-1.5 rounded-full border text-sm"
+            >
               {brands.map((b) => (
                 <option key={b} value={b}>
                   {b === "all" ? "Marques" : b}
                 </option>
               ))}
             </select>
-            <select value={age} onChange={(e) => setAge(e.target.value)} className="px-3 py-1.5 rounded-full border text-sm">
+            <select
+              value={age}
+              onChange={(e) => {
+                const v = e.target.value;
+                startTransition(() => setAge(v));
+              }}
+              className="px-3 py-1.5 rounded-full border text-sm"
+            >
               {ages.map((a) => (
                 <option key={a} value={a}>
                   {a === "all" ? "Âges" : a}
                 </option>
               ))}
             </select>
-            <select value={sort} onChange={(e) => setSort(e.target.value)} className="px-3 py-1.5 rounded-full border text-sm">
+            <select
+              value={sort}
+              onChange={(e) => {
+                const v = e.target.value;
+                startTransition(() => setSort(v));
+              }}
+              className="px-3 py-1.5 rounded-full border text-sm"
+            >
               <option value="none">Tri</option>
               <option value="price-asc">Prix ↑</option>
               <option value="price-desc">Prix ↓</option>
@@ -302,44 +445,85 @@ export default function Landing() {
         <div className="mt-6 hidden lg:grid lg:grid-cols-6 gap-3">
           <input
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              startTransition(() => setQ(v));
+            }}
             placeholder="Rechercher un produit…"
             className="px-3 py-2 rounded-xl border"
+            inputMode="search"
+            enterKeyHint="search"
+            autoComplete="off"
           />
-          <select value={pet} onChange={(e) => setPet(e.target.value)} className="px-3 py-2 rounded-xl border">
+          <select
+            value={pet}
+            onChange={(e) => {
+              const v = e.target.value;
+              startTransition(() => setPet(v));
+            }}
+            className="px-3 py-2 rounded-xl border"
+          >
             <option value="all">Chat & Chien</option>
             <option value="chat">Chat</option>
             <option value="chien">Chien</option>
           </select>
-          <select value={cat} onChange={(e) => setCat(e.target.value)} className="px-3 py-2 rounded-xl border">
+          <select
+            value={cat}
+            onChange={(e) => {
+              const v = e.target.value;
+              startTransition(() => setCat(v));
+            }}
+            className="px-3 py-2 rounded-xl border"
+          >
             {cats.map((c) => (
               <option key={c} value={c}>
                 {c === "all" ? "Toutes catégories" : c}
               </option>
             ))}
           </select>
-          <select value={brand} onChange={(e) => setBrand(e.target.value)} className="px-3 py-2 rounded-xl border">
+          <select
+            value={brand}
+            onChange={(e) => {
+              const v = e.target.value;
+              startTransition(() => setBrand(v));
+            }}
+            className="px-3 py-2 rounded-xl border"
+          >
             {brands.map((b) => (
               <option key={b} value={b}>
                 {b === "all" ? "Toutes marques" : b}
               </option>
             ))}
           </select>
-          <select value={age} onChange={(e) => setAge(e.target.value)} className="px-3 py-2 rounded-xl border">
+          <select
+            value={age}
+            onChange={(e) => {
+              const v = e.target.value;
+              startTransition(() => setAge(v));
+            }}
+            className="px-3 py-2 rounded-xl border"
+          >
             {ages.map((a) => (
               <option key={a} value={a}>
                 {a === "all" ? "Tous âges" : a}
               </option>
             ))}
           </select>
-          <select value={sort} onChange={(e) => setSort(e.target.value)} className="px-3 py-2 rounded-xl border">
+          <select
+            value={sort}
+            onChange={(e) => {
+              const v = e.target.value;
+              startTransition(() => setSort(v));
+            }}
+            className="px-3 py-2 rounded-xl border"
+          >
             <option value="none">Tri : défaut</option>
             <option value="price-asc">Prix croissant</option>
             <option value="price-desc">Prix décroissant</option>
             <option value="name-asc">Nom A → Z</option>
           </select>
         </div>
-      </section>
+      </Reveal>
 
       {/* --- Grille produits --- */}
       <main className="max-w-7xl mx-auto px-4 py-8">
@@ -356,10 +540,13 @@ export default function Landing() {
         ) : (
           <div
             id="produits"
-            className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+            className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 cv-auto"
+            style={{ scrollMarginTop: 80 }}
           >
-            {sorted.map((p) => (
-              <Card key={p.id} p={p} onAdd={handleAdd} />
+            {sorted.map((p, i) => (
+              <Reveal key={p.id} delay={i * 40}>
+                <Card p={p} onAdd={handleAdd} />
+              </Reveal>
             ))}
           </div>
         )}

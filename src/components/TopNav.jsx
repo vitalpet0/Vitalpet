@@ -1,13 +1,34 @@
 // src/components/TopNav.jsx
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useCart } from "../context/CartContext.jsx";
+import supabase from "../lib/supabase.js";
+import { ShoppingCart, User } from "lucide-react";
 
 export default function TopNav() {
   const { count } = useCart();
   const ref = useRef(null);
 
-  // Mesure la hauteur réelle de la nav et l’expose en CSS (--nav-h)
+  // --- Auth state (pour le bouton Compte)
+  const [userEmail, setUserEmail] = useState(null);
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      if (mounted) setUserEmail(data?.user?.email || null);
+    })();
+
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      if (mounted) setUserEmail(session?.user?.email || null);
+    });
+
+    return () => sub?.subscription?.unsubscribe?.();
+  }, []);
+
+  const accountHref = userEmail ? "/account" : "/login";
+
+  // --- Mesure la hauteur réelle de la nav et l’expose en CSS (--nav-h)
   useEffect(() => {
     const syncHeight = () => {
       const h = ref.current?.offsetHeight || 56;
@@ -23,63 +44,82 @@ export default function TopNav() {
   const active = "bg-neutral-900 text-white hover:bg-neutral-900";
   const inactive = "text-neutral-700";
 
+  // Petit avatar “initiales” si connecté
+  const initials =
+    userEmail?.trim()?.[0]?.toUpperCase() ?? null;
+
   return (
     <nav
       ref={ref}
-      className="fixed top-0 inset-x-0 z-50 bg-white/80 backdrop-blur border-b
-                 pt-[env(safe-area-inset-top)]"
+      className="fixed top-0 inset-x-0 z-50 bg-white/80 backdrop-blur border-b pt-[env(safe-area-inset-top)]"
     >
       <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-emerald-500 grid place-items-center text-white font-semibold">
+          <div className="w-8 h-8 rounded-xl bg-emerald-600 grid place-items-center text-white font-semibold">
             VP
           </div>
           <span className="font-semibold tracking-tight">VitalPet</span>
         </Link>
 
-        {/* Liens */}
+        {/* Liens (desktop) */}
         <div className="hidden sm:flex items-center gap-1">
           <NavLink
             to="/"
-            className={({ isActive }) =>
-              `${linkBase} ${isActive ? active : inactive}`
-            }
+            className={({ isActive }) => `${linkBase} ${isActive ? active : inactive}`}
             end
           >
             Boutique
           </NavLink>
-
           <NavLink
             to="/box"
-            className={({ isActive }) =>
-              `${linkBase} ${isActive ? active : inactive}`
-            }
+            className={({ isActive }) => `${linkBase} ${isActive ? active : inactive}`}
           >
             VitalPet Box
           </NavLink>
-
-        <NavLink
+          <NavLink
             to="/livraison"
-            className={({ isActive }) =>
-              `${linkBase} ${isActive ? active : inactive}`
-            }
+            className={({ isActive }) => `${linkBase} ${isActive ? active : inactive}`}
           >
             Livraison
           </NavLink>
         </div>
 
-        {/* Panier */}
-        <Link
-          to="/cart"
-          className="relative inline-flex items-center gap-2 rounded-lg bg-neutral-900 text-white px-3 py-1.5 text-sm hover:opacity-90"
-          aria-label="Voir le panier"
-        >
-          <span>Panier</span>
-          <span className="min-w-5 h-5 grid place-items-center rounded-md bg-white/15 text-xs">
-            {count}
-          </span>
-        </Link>
+        {/* Actions (Panier + Compte) */}
+        <div className="flex items-center gap-2">
+          {/* Compte */}
+          <Link
+            to={accountHref}
+            className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm hover:bg-neutral-50"
+            aria-label={userEmail ? "Aller à mon compte" : "Se connecter"}
+          >
+            <span className="relative inline-flex items-center justify-center">
+              {initials ? (
+                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[10px] grid place-items-center">
+                  {initials}
+                </span>
+              ) : (
+                <User size={16} className="text-neutral-700" />
+              )}
+            </span>
+            <span className="hidden sm:inline">
+              {userEmail ? "Compte" : "Se connecter"}
+            </span>
+          </Link>
+
+          {/* Panier */}
+          <Link
+            to="/cart"
+            className="relative inline-flex items-center gap-2 rounded-lg bg-neutral-900 text-white px-3 py-1.5 text-sm hover:opacity-90"
+            aria-label="Voir le panier"
+          >
+            <ShoppingCart size={16} />
+            <span className="hidden sm:inline">Panier</span>
+            <span className="min-w-5 h-5 grid place-items-center rounded-md bg-white/15 text-[11px] px-1">
+              {count}
+            </span>
+          </Link>
+        </div>
       </div>
     </nav>
   );

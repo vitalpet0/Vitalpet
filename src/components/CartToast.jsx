@@ -1,113 +1,144 @@
 // src/components/CartToast.jsx
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
 /**
- * Toast d'ajout au panier
- *
- * Props:
- * - open: boolean (affiché ou non)
- * - count: number (nombre total d'articles dans le panier)
- * - onClose: () => void (fermeture manuelle/auto)
- * - lastLabel?: string (nom du dernier produit ajouté — optionnel)
- * - autoHideMs?: number | null (durée avant auto-fermeture; null pour désactiver) — par défaut 2200ms
+ * Toast d'ajout au panier — compact, fond gris semi-flou
  */
 export default function CartToast({
   open,
   count = 0,
-  onClose,
   lastLabel,
-  autoHideMs = 2200,
+  onClose,
+  autoHideMs = 2000,
+  offsetBottom = 60,
 }) {
-  // Auto hide
+  const ref = useRef(null);
+
+  // Auto-hide
   useEffect(() => {
     if (!open || !autoHideMs) return;
     const t = setTimeout(() => onClose?.(), autoHideMs);
     return () => clearTimeout(t);
   }, [open, autoHideMs, onClose]);
 
-  // Close on Escape
+  // Escape key
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") onClose?.();
-    };
+    const onKey = (e) => e.key === "Escape" && onClose?.();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  // Respecte "réduire les animations"
-  const prefersReducedMotion =
+  const reduce =
     typeof window !== "undefined" &&
-    window.matchMedia &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+
+  // Swipe down (mobile)
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !open) return;
+    let startY = 0,
+      moved = 0,
+      dragging = false;
+
+    const onStart = (e) => {
+      dragging = true;
+      startY = e.touches ? e.touches[0].clientY : e.clientY;
+      moved = 0;
+      el.style.transition = "none";
+    };
+
+    const onMove = (e) => {
+      if (!dragging) return;
+      const y = e.touches ? e.touches[0].clientY : e.clientY;
+      moved = Math.max(0, y - startY);
+      el.style.transform = `translate(-50%, ${Math.min(50, 8 + moved)}px)`;
+      el.style.opacity = String(Math.max(0, 1 - moved / 100));
+    };
+
+    const onEnd = () => {
+      if (!dragging) return;
+      dragging = false;
+      if (moved > 40) onClose?.();
+      else {
+        el.style.transition = reduce
+          ? "none"
+          : "opacity 250ms cubic-bezier(0.22,1,0.36,1), transform 250ms cubic-bezier(0.22,1,0.36,1)";
+        el.style.transform = "translate(-50%, 0)";
+        el.style.opacity = "1";
+      }
+    };
+
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: true });
+    el.addEventListener("touchend", onEnd);
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+      el.removeEventListener("touchend", onEnd);
+    };
+  }, [open, onClose, reduce]);
+
+  const transition = reduce
+    ? ""
+    : "opacity 260ms cubic-bezier(0.22,1,0.36,1), transform 260ms cubic-bezier(0.22,1,0.36,1)";
+  const bottomCSS = `calc(max(0.5rem, env(safe-area-inset-bottom)) + ${offsetBottom}px)`;
 
   return (
     <div
+      ref={ref}
+      role="status"
       aria-live="polite"
       aria-atomic="true"
-      role="status"
-      className={[
-        // placement: centré mobile, bas-droite en md+
-        "pointer-events-none fixed z-[60]",
-        // safe-area iPhone : on garde au moins 1rem, ou le bord arrondi si plus grand
-        "left-1/2 -translate-x-1/2 md:left-auto md:right-4 md:translate-x-0",
-        "bottom-[max(1rem,env(safe-area-inset-bottom))]",
-        // animation
-        prefersReducedMotion
-          ? ""
-          : "transition-all duration-300 will-change-transform will-change-opacity",
-        open ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4",
-      ].join(" ")}
+      className="fixed z-[120] pointer-events-none left-1/2 -translate-x-1/2 md:left-auto md:right-4 md:translate-x-0"
+      style={{
+        bottom: bottomCSS,
+        transition,
+        transform: open
+          ? "translate(-50%, 0) scale(1)"
+          : "translate(-50%, 8px) scale(0.97)",
+        opacity: open ? 1 : 0,
+      }}
     >
       <div
         className={[
-          "pointer-events-auto",
-          // Style “verre dépoli” lisible
-          "bg-neutral-900/90 backdrop-blur supports-[backdrop-filter]:backdrop-blur",
-          "text-white rounded-xl shadow-lg",
-          // padding généreux + safe-area interne pour éviter le menton iPhone
-          "px-4 py-3",
-          "border border-white/10",
-          // layout
-          "flex items-center gap-3",
-          // largeur max pour longues étiquettes
-          "max-w-[92vw] md:max-w-none",
+          "pointer-events-auto flex items-center gap-2",
+          "rounded-lg backdrop-blur-md bg-neutral-800/80 text-white shadow-lg",
+          "px-3 py-2 min-h-[38px] border border-white/10",
+          "max-w-[300px]",
         ].join(" ")}
-        // marge interne pour le safe area (en plus du bottom externe)
-        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
       >
-        {/* pastille du compteur */}
-        <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-md bg-emerald-500 text-sm font-semibold px-2">
+        {/* pastille */}
+        <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-md bg-emerald-500 text-[12px] font-semibold px-1.5">
           {count}
         </span>
 
-        {/* contenu texte */}
-        <div className="text-sm min-w-0">
+        {/* texte */}
+        <div className="text-[13px] leading-snug flex-1 min-w-0">
           <div className="font-medium">
-            article{count > 1 ? "s" : ""} dans votre panier
+            {count} article{count > 1 ? "s" : ""} ajouté
           </div>
-          {lastLabel ? (
-            <div className="text-white/80 line-clamp-1 max-w-[50ch]">
-              Ajouté : <span className="text-white">{lastLabel}</span>
+          {lastLabel && (
+            <div className="text-white/80 line-clamp-1">
+              {lastLabel}
             </div>
-          ) : null}
+          )}
         </div>
 
-        {/* CTA panier : zone de tap large sur mobile */}
+        {/* bouton panier */}
         <Link
           to="/cart"
-          className="ml-2 rounded-lg bg-white/10 hover:bg-white/20 px-3 py-2 text-sm flex items-center gap-1 focus:outline-none focus:ring-2 focus:ring-white/60"
+          className="ml-auto text-[12px] font-medium text-white/90 hover:text-white px-2 py-1 rounded-md hover:bg-white/10 focus:ring-2 focus:ring-white/40 focus:outline-none"
         >
-          Aller au panier <span aria-hidden>→</span>
-          <span className="sr-only">Aller à la page panier</span>
+          → 
         </Link>
 
-        {/* bouton fermer : cible tactile ≥44px */}
+        {/* bouton fermer */}
         <button
           onClick={onClose}
-          className="ml-1 grid place-items-center text-white/70 hover:text-white text-base h-9 w-9 rounded-md focus:outline-none focus:ring-2 focus:ring-white/60"
-          aria-label="Fermer la notification"
+          className="ml-0.5 grid place-items-center text-white/70 hover:text-white text-sm h-7 w-7 rounded-md focus:outline-none focus:ring-2 focus:ring-white/40"
+          aria-label="Fermer"
         >
           ×
         </button>

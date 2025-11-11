@@ -1,7 +1,54 @@
 // src/pages/Cart.jsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext.jsx";
+
+/* ----------------- Reveal (même effet que la page Box) ----------------- */
+function Reveal({ as: Tag = "div", delay = 0, className = "", children }) {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const reduce =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { setVisible(true); return; }
+
+    const el = ref.current;
+    if (!el) return;
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            const t = setTimeout(() => setVisible(true), delay);
+            io.unobserve(el);
+            return () => clearTimeout(t);
+          }
+        });
+      },
+      { rootMargin: "0px 0px -10% 0px", threshold: 0.1 }
+    );
+
+    io.observe(el);
+    return () => io.disconnect();
+  }, [delay]);
+
+  return (
+    <Tag
+      ref={ref}
+      className={
+        className +
+        " transition-all duration-700 ease-out will-change-transform" +
+        (visible ? " opacity-100 translate-y-0" : " opacity-0 translate-y-4")
+      }
+    >
+      {children}
+    </Tag>
+  );
+}
+/* ---------------------------------------------------------------------- */
 
 const PLACEHOLDER_IMG =
   "data:image/svg+xml;utf8," +
@@ -13,8 +60,86 @@ const PLACEHOLDER_IMG =
     </svg>`
   );
 
+/* -------- Helpers prix (robuste: HT+TVA ou TTC direct) -------- */
+const DEFAULT_VAT = 20;
+function unitPriceTTC(it) {
+  // Si l'item a un prix HT + un taux, on calcule TTC
+  if (typeof it.unitPriceHT === "number") {
+    const rate = Number.isFinite(Number(it.taxRate)) ? Number(it.taxRate) : DEFAULT_VAT;
+    return it.unitPriceHT * (1 + rate / 100);
+  }
+  // Sinon on considère `price` comme TTC
+  return Number(it.price || 0);
+}
+
+function QtyControl({ value, onMinus, onPlus, onChange }) {
+  const v = Number.isFinite(Number(value)) ? Number(value) : 0;
+
+  const handleKeyDown = (e) => {
+    if (e.key === "ArrowUp") { e.preventDefault(); onPlus(); }
+    if (e.key === "ArrowDown") { e.preventDefault(); onMinus(); }
+    if (e.key === "Enter") { e.currentTarget.blur(); }
+  };
+
+  return (
+    <div
+      className="
+        inline-flex items-center gap-0 rounded-full border bg-white
+        overflow-hidden shadow-sm
+      "
+      role="group"
+      aria-label="Contrôle de quantité"
+    >
+      <button
+        type="button"
+        onClick={onMinus}
+        disabled={v <= 0}
+        className="
+          h-10 w-10 grid place-items-center text-lg
+          disabled:opacity-40 disabled:cursor-not-allowed
+          hover:bg-neutral-50 active:scale-[0.98] transition
+          focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40
+        "
+        aria-label="Diminuer la quantité"
+      >
+        −
+      </button>
+
+      <input
+        value={v}
+        onChange={(e) => {
+          const n = e.target.value.replace(/[^\d]/g, "");
+          onChange(n === "" ? 0 : parseInt(n, 10));
+        }}
+        onKeyDown={handleKeyDown}
+        inputMode="numeric"
+        aria-live="polite"
+        className="
+          h-10 w-12 text-center tabular-nums
+          bg-transparent outline-none
+          border-x border-neutral-200
+        "
+      />
+
+      <button
+        type="button"
+        onClick={onPlus}
+        className="
+          h-10 w-10 grid place-items-center text-lg
+          hover:bg-neutral-50 active:scale-[0.98] transition
+          focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40
+        "
+        aria-label="Augmenter la quantité"
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
 function Row({ item, onMinus, onPlus, onChange, onRemove }) {
-  const line = (item.price * item.qty).toFixed(2);
+  const up = unitPriceTTC(item);
+  const line = (up * item.qty).toFixed(2);
 
   return (
     <div
@@ -24,7 +149,6 @@ function Row({ item, onMinus, onPlus, onChange, onRemove }) {
         sm:grid-cols-[72px_1fr_auto_auto_auto]
       "
     >
-      {/* Visuel */}
       <img
         src={item.img || PLACEHOLDER_IMG}
         onError={(e) => (e.currentTarget.src = PLACEHOLDER_IMG)}
@@ -32,13 +156,11 @@ function Row({ item, onMinus, onPlus, onChange, onRemove }) {
         className="w-20 h-20 sm:w-[72px] sm:h-[72px] object-cover rounded-lg"
       />
 
-      {/* Bloc titre + marque (et PRIX à droite sur mobile) */}
       <div className="min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div className="font-medium truncate">{item.name}</div>
-          {/* Prix unitaire visible à droite du titre sur mobile pour éviter le chevauchement */}
           <div className="sm:hidden text-right tabular-nums shrink-0">
-            {item.price.toFixed(2)}€
+            {up.toFixed(2)}€
           </div>
         </div>
         {item.brand && (
@@ -46,44 +168,26 @@ function Row({ item, onMinus, onPlus, onChange, onRemove }) {
         )}
       </div>
 
-      {/* Prix unitaire (version desktop/tablette) */}
       <div className="hidden sm:block text-right tabular-nums">
-        {item.price.toFixed(2)}€
+        {up.toFixed(2)}€
       </div>
 
-      {/* Contrôles quantité */}
-      <div className="flex items-center justify-end gap-2">
-        <button
-          onClick={onMinus}
-          className="w-7 h-7 rounded-md border grid place-items-center"
-          aria-label="Diminuer la quantité"
-        >
-          −
-        </button>
-        <input
+      <div className="flex items-center justify-end">
+        <QtyControl
           value={item.qty}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-12 text-center rounded-md border py-1"
-          inputMode="numeric"
-          aria-label="Quantité"
+          onMinus={onMinus}
+          onPlus={onPlus}
+          onChange={onChange}
         />
-        <button
-          onClick={onPlus}
-          className="w-7 h-7 rounded-md border grid place-items-center"
-          aria-label="Augmenter la quantité"
-        >
-          +
-        </button>
       </div>
 
-      {/* Total de ligne */}
       <div className="text-right tabular-nums font-semibold">{line}€</div>
 
-      {/* Retirer */}
       <button
         onClick={onRemove}
         className="col-span-2 sm:col-span-5 justify-self-end text-sm text-red-600 hover:text-red-700 mt-1"
         aria-label={`Retirer ${item.name}`}
+        type="button"
       >
         Retirer
       </button>
@@ -92,63 +196,168 @@ function Row({ item, onMinus, onPlus, onChange, onRemove }) {
 }
 
 export default function Cart() {
-  const { items, updateQty, remove, clear, subtotal } = useCart();
+  // Si ton CartContext expose setCurrency / setShipping, on les utilise.
+  const { items, updateQty, remove, clear } = useCart();
   const navigate = useNavigate();
+
+  // ===== Prix =====
+  const subtotal = useMemo(
+    () => (items || []).reduce((s, it) => s + unitPriceTTC(it) * (Number(it.qty) || 0), 0),
+    [items]
+  );
+
   const [shippingMode, setShippingMode] = useState("standard");
 
-  const shipping = useMemo(() => {
-    if (items.length === 0) return 0;
+  // Frais de port TTC
+  const shippingTTC = useMemo(() => {
+    if (!items || items.length === 0) return 0;
     if (subtotal >= 49) return 0;
     return shippingMode === "express" ? 7.9 : 4.9;
-  }, [items.length, subtotal, shippingMode]);
+  }, [items, subtotal, shippingMode]);
 
-  const total = useMemo(() => subtotal + shipping, [subtotal, shipping]);
+  const total = useMemo(() => subtotal + shippingTTC, [subtotal, shippingTTC]);
 
-  if (items.length === 0) {
+  // ====== Préparation Checkout (HT + TVA) ======
+  const VAT_RATE = DEFAULT_VAT;
+  const currency = "EUR";
+
+  // Normalise les lignes pour l’API (HT + TVA)
+  const cartPayload = useMemo(
+    () =>
+      (items || []).map((it) => {
+        // Si l’item est déjà en HT + taxRate, on réutilise.
+        if (typeof it.unitPriceHT === "number") {
+          return {
+            id: it.id,
+            sku: it.sku || it.id,
+            title: it.name,
+            quantity: Number(it.qty || 1),
+            priceHT: Number(it.unitPriceHT),
+            vat: Number(isFinite(it.taxRate) ? it.taxRate : VAT_RATE),
+          };
+        }
+        // Sinon on convertit depuis TTC → HT avec le taux par défaut.
+        const priceHT = VAT_RATE > 0 ? Number(it.price) / (1 + VAT_RATE / 100) : Number(it.price);
+        return {
+          id: it.id,
+          sku: it.sku || it.id,
+          title: it.name,
+          quantity: Number(it.qty || 1),
+          priceHT,
+          vat: VAT_RATE,
+        };
+      }),
+    [items]
+  );
+
+  // Livraison (HT + TVA)
+  const shippingPayload = useMemo(() => {
+    const amountHT =
+      VAT_RATE > 0 ? Number(shippingTTC || 0) / (1 + VAT_RATE / 100) : Number(shippingTTC || 0);
+    return {
+      label: shippingMode === "express" ? "Livraison express" : "Livraison standard",
+      amount: Number(amountHT || 0), // HT
+      taxRate: VAT_RATE,
+    };
+  }, [shippingTTC, shippingMode]);
+
+  // Persistance silencieuse pour Checkout (si Checkout lit localStorage)
+  useEffect(() => {
+    try {
+      if (!items || items.length === 0) {
+        localStorage.removeItem("cart");
+        localStorage.removeItem("checkoutShipping");
+        localStorage.setItem("currency", currency);
+        return;
+      }
+      localStorage.setItem("cart", JSON.stringify(cartPayload));
+      localStorage.setItem("checkoutShipping", JSON.stringify(shippingPayload));
+      localStorage.setItem("currency", currency);
+    } catch {
+      // ignore
+    }
+  }, [items, cartPayload, shippingPayload]);
+
+  if (!items || items.length === 0) {
     return (
       <div className="max-w-5xl mx-auto px-4 py-10">
-        <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">Votre panier</h1>
-        <div className="mt-6 rounded-2xl border bg-white p-8 text-center">
-          <p className="text-neutral-600">Votre panier est vide.</p>
-          <Link to="/" className="inline-block mt-4 px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700">
-            Explorer la boutique
-          </Link>
-        </div>
+        <Reveal as="h1" className="text-3xl md:text-4xl font-semibold tracking-tight">
+          Votre panier
+        </Reveal>
+        <Reveal delay={80} className="mt-6">
+          <div className="rounded-2xl border bg-white p-8 text-center">
+            <p className="text-neutral-600">Votre panier est vide.</p>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+             <Link
+               to="/box"
+              className="px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700"
+           >
+               Voir nos box
+             </Link>
+             <Link
+            to="/"
+               className="px-4 py-2 rounded-xl bg-neutral-100 hover:bg-neutral-200"
+             >
+               Explorer la boutique
+               
+              </Link>
+           </div>
+          </div>
+        </Reveal>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-10 grid lg:grid-cols-[2fr_1fr] gap-6">
+    <div className="max-w-7xl mx-auto px-3 py-10 grid lg:grid-cols-[2fr_1fr] gap-6">
       {/* Liste des articles */}
       <section>
-        <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">Votre panier</h1>
+        <Reveal as="h1" className="text-3xl md:text-4xl font-semibold tracking-tight">
+          Votre panier
+        </Reveal>
+
         <div className="mt-4 space-y-3">
-          {items.map((it) => (
-            <Row
-              key={it.id}
-              item={it}
-              onMinus={() => updateQty(it.id, it.qty - 1)}
-              onPlus={() => updateQty(it.id, it.qty + 1)}
-              onChange={(v) => updateQty(it.id, v)}
-              onRemove={() => remove(it.id)}
-            />
+          {items.map((it, i) => (
+            <Reveal key={it.id} delay={i * 60}>
+              <Row
+                item={it}
+                onMinus={() => updateQty(it.id, Math.max(0, (Number(it.qty) || 0) - 1))}
+                onPlus={() => updateQty(it.id, (Number(it.qty) || 0) + 1)}
+                onChange={(v) => {
+                  const n = Math.max(0, parseInt(v || "0", 10));
+                  updateQty(it.id, n);
+                }}
+                onRemove={() => remove(it.id)}
+              />
+            </Reveal>
           ))}
         </div>
 
-        <div className="mt-4 flex items-center justify-between">
-          <button onClick={clear} className="text-sm text-neutral-600 hover:text-neutral-800">
-            Vider le panier
-          </button>
-          <Link to="/" className="text-sm text-emerald-700 hover:text-emerald-800">
-            Continuer mes achats →
-          </Link>
-        </div>
+        <Reveal delay={120} className="mt-3">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={() => {
+                clear();
+                try {
+                  localStorage.removeItem("cart");
+                  localStorage.removeItem("checkoutShipping");
+                } catch {}
+              }}
+              className="text-sm text-neutral-600 hover:text-neutral-800"
+              type="button"
+            >
+              Vider le panier
+            </button>
+            <Link to="/" className="text-sm text-emerald-700 hover:text-emerald-800">
+              Continuer mes achats →
+            </Link>
+          </div>
+        </Reveal>
       </section>
 
       {/* Récapitulatif */}
       <aside className="lg:sticky lg:top-6 h-max">
-        <div className="rounded-2xl border bg-white p-5">
+        <Reveal className="rounded-2xl border bg-white p-5">
           <h2 className="text-lg font-semibold">Récapitulatif</h2>
           <div className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between">
@@ -168,7 +377,9 @@ export default function Cart() {
                   <option value="express">Express (24–48h)</option>
                 </select>
               </label>
-              <span className="tabular-nums">{shipping === 0 ? "Offerte" : `${shipping.toFixed(2)}€`}</span>
+              <span className="tabular-nums">
+                {shippingTTC === 0 ? "Offerte" : `${shippingTTC.toFixed(2)}€`}
+              </span>
             </div>
 
             <div className="flex justify-between font-semibold pt-2 border-t mt-2">
@@ -179,7 +390,8 @@ export default function Cart() {
 
           <button
             onClick={() => navigate("/checkout")}
-            className="mt-4 w-full px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700"
+            className="mt-4 w-full h-11 px-4 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 active:scale-[0.99]"
+            type="button"
           >
             Valider ma commande
           </button>
@@ -187,7 +399,7 @@ export default function Cart() {
           <p className="text-xs text-neutral-500 mt-3">
             Livraison offerte dès 49€. Retours sous 14 jours. Paiement sécurisé.
           </p>
-        </div>
+        </Reveal>
       </aside>
     </div>
   );
