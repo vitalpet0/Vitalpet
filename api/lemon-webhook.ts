@@ -19,43 +19,49 @@ export default async function handler(req: any, res: any) {
 
   try {
     const payload = await readJsonBody();
+
+    // 3) On lit le type d’évènement depuis l’entête Lemon
+    //    (Lemon envoie "X-Event-Name": ex. "subscription_payment_success")
+    const eventName = String(req.headers["x-event-name"] || "").trim();
+
+    // 4) On ne TRAITE que le paiement réussi, on skippe le reste pour éviter les doublons.
+    if (eventName !== "subscription_payment_success") {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("lemon-webhook: skipped event:", eventName || "<none>");
+      }
+      return res.status(200).json({ ok: true, forwarded: false, reason: "skipped_event" });
+    }
+
+    // 5) Champs utiles
     const data = payload?.data || {};
     const attributes = data?.attributes || {};
-    // On ratisse large pour trouver un email
-    let safeEmail =
-      String(
-        attributes?.user_email ||
-          attributes?.email ||
-          attributes?.customer_email ||
-          attributes?.user?.email ||
-          attributes?.customer?.email ||
-          ""
-      )
-        .trim()
-        .toLowerCase();
 
-    // (Optionnel) si un jour tu veux vérifier la signature officielle Lemon :
-    // const signature = req.headers["x-signature"] as string | undefined;
-    // const secret = process.env.LEMON_SIGNING_SECRET || "";
-    // -> si secret, vérifier HMAC(signature, rawBody) etc. (pas nécessaire pour avancer)
+    const email =
+      attributes?.user_email ||
+      attributes?.email ||
+      attributes?.customer_email ||
+      attributes?.user?.email ||
+      attributes?.customer?.email ||
+      "";
 
-    if (process.env.NODE_ENV !== "production") {
-      console.log("lemon-webhook in:", {
-        type: data?.type,
-        id: data?.id,
-        email: safeEmail || "(none)",
-      });
-    }
+    const firstName =
+      attributes?.user_name ||
+      attributes?.first_name ||
+      "";
 
-    // 3) S'il n'y a pas d'email, on ACK pour éviter les retries, mais on ne forward pas
+    const lastName = attributes?.last_name || "";
+    const phone = attributes?.user_phone || "";
+
+    const safeEmail = String(email || "").trim().toLowerCase();
     if (!safeEmail) {
-      return res.status(200).json({ ok: true, forwarded: false, reason: "no email" });
+      // On ack, mais on ne forward pas si pas d’email (sinon retry infini côté Lemon)
+      return res.status(200).json({ ok: true, forwarded: false, reason: "no_email" });
     }
 
-    // 4) Forward interne → Sellsy (création/màj contact seulement)
+    // 6) Forward interne -> crée/MAJ le contact uniquement (pas de devis ici)
     const baseUrl =
       process.env.SELF_BASE_URL ||
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://vitalpetfrance.com");
 
     const fwd = await fetch(`${baseUrl}/api/sellsy-sync`, {
       method: "POST",
@@ -64,19 +70,19 @@ export default async function handler(req: any, res: any) {
         kind: "create_contact",
         payload: {
           email: safeEmail,
-          first_name: attributes?.user_name || attributes?.first_name || "",
-          last_name: attributes?.last_name || "",
-          phone: attributes?.user_phone || "",
+          first_name: firstName,
+          last_name: lastName,
+          phone,
         },
       }),
     });
 
-    const fwdTxt = await fwd.text();
+    const out = await fwd.text();
     if (process.env.NODE_ENV !== "production") {
-      console.log("sellsy-sync <- webhook:", fwd.status, fwdTxt.slice(0, 400));
+      console.log("sellsy-sync <- webhook:", fwd.status, out.slice(0, 300));
     }
 
-    // 5) Toujours 200 pour que Lemon arrête de marquer en rouge
+    // Toujours 200 pour stopper les retries de Lemon
     return res.status(200).json({ ok: true, forwarded: true });
   } catch (e: any) {
     console.error("lemon-webhook error:", e?.message || e);
