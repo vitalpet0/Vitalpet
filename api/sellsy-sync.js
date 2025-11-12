@@ -47,7 +47,6 @@ export default async function handler(req, res) {
 
   // === 2) Body venant du front OU d’un webhook interne ===
   const body = await readJsonBody();
-  // On accepte aussi convertToInvoice, kind et payload pour webhooks
   const {
     form: rawForm = {},
     cart: rawCart = [],
@@ -93,7 +92,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({ filters: { email: [email] }, limit: 5 }),
       });
       const items = Array.isArray(j?.data) ? j.data : [];
-      return items.find((it) => it?.email?.toLowerCase?.() === email) || null;
+      return items.find((it) => String(it?.email || "").toLowerCase() === email) || null;
     } catch {
       return null;
     }
@@ -127,7 +126,7 @@ export default async function handler(req, res) {
     });
   }
 
-  // Adresse principale (best-effort)
+  // ----- Adresses
   async function createAddress(individualId, f, countryCode) {
     return await sfetch(`${API_BASE}/individuals/${individualId}/addresses`, {
       method: "POST",
@@ -140,6 +139,30 @@ export default async function handler(req, res) {
         country_code: countryCode,
       }),
     });
+  }
+
+  async function listAddresses(individualId) {
+    try {
+      const r = await sfetch(`${API_BASE}/individuals/${individualId}/addresses`, { method: "GET" });
+      return Array.isArray(r?.data) ? r.data : [];
+    } catch {
+      return [];
+    }
+  }
+
+  // Crée l’adresse si le contact n’en a aucune ET qu’on a bien une adresse dans le form
+  async function ensureAddress(individualId, f, countryCode) {
+    const existing = await listAddresses(individualId);
+    const hasAny = existing.length > 0;
+    const hasFormAddress = !!(f.adresse || f.ville || f.codePostal);
+    if (!hasAny && hasFormAddress) {
+      try {
+        await createAddress(individualId, f, countryCode);
+        console.log("📮 Adresse créée (ensureAddress)");
+      } catch (e) {
+        console.warn("Adresse non créée (ensureAddress):", e.message);
+      }
+    }
   }
 
   // --- Taxes cache
@@ -166,7 +189,6 @@ export default async function handler(req, res) {
 
     const rows = [];
     for (const item of cart) {
-      // garde-fous : valeurs propres
       const qty = Math.max(1, Number(item.qty || 1));
       const unit = Number.isFinite(Number(item.unitPrice)) ? Number(item.unitPrice) : 0;
 
@@ -218,7 +240,7 @@ export default async function handler(req, res) {
     return created;
   }
 
-  // ====== 💡 Mode WEBHOOK (ne touche pas au flux existant) ======
+  // ====== 💡 Mode WEBHOOK (create_contact) ======
   // { kind: "create_contact", payload: { email, first_name, last_name, phone } }
   if (body?.kind === "create_contact") {
     try {
@@ -246,6 +268,7 @@ export default async function handler(req, res) {
         status = "Client créé (webhook)";
       }
 
+      // Pas d’adresse dans ce flux (Lemon envoie peu d’infos)
       return res.status(200).json({
         ok: true,
         mode: "webhook",
@@ -258,27 +281,22 @@ export default async function handler(req, res) {
     }
   }
 
-  // ====== Support pour conversion depuis un webhook de paiement ======
+  // ====== 💡 Mode WEBHOOK (payment_succeeded) ======
   // { kind: "payment_succeeded", payload: { estimateId, email } }
   if (body?.kind === "payment_succeeded") {
     try {
       const p = body.payload || {};
       const estimateId =
         p.estimateId || p.estimate_id || p.sellsy_estimate_id || topLevelEstimateId || null;
-      const email = String(p.email || p.customer_email || "").trim().toLowerCase();
 
       if (!estimateId) {
         return res.status(400).json({ ok: false, error: "estimateId requis (payment_succeeded)" });
       }
 
-      // On tente la conversion
       try {
         const invoice = await sfetch(`${API_BASE}/estimates/${estimateId}/convert-to-invoice`, {
           method: "POST",
-          body: JSON.stringify({
-            status: "sent",
-            send_email: false,
-          }),
+          body: JSON.stringify({ status: "sent", send_email: false }),
         });
         const invoiceId = invoice?.data?.id || invoice?.id || null;
         console.log("🧾 Devis converti via webhook:", estimateId, "->", invoiceId);
@@ -292,9 +310,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, error: e.message || String(e), mode: "payment_succeeded" });
     }
   }
-  // ====== fin du mode webhook ======
+  // ====== fin des modes webhook ======
 
-  // === 2-bis) Normalisation form (flux FRONT existant)
+  // === 2-bis) Normalisation form (flux FRONT pour création devis) ===
   const form = {
     prenom: (rawForm.prenom || "").trim(),
     nom: (rawForm.nom || "").trim(),
@@ -306,24 +324,22 @@ export default async function handler(req, res) {
     codePostal: (rawForm.codePostal || rawForm.postalCode || rawForm.zipcode || "").trim(),
   };
 
-  const countryCode = "FR"; // centralisé
+  const countryCode = (rawForm.pays || rawForm.country || "FR").toString().slice(0, 2).toUpperCase();
 
   if (!form.email) {
     return res.status(400).json({ ok: false, error: "Email requis pour le client" });
   }
 
-  // Panier normalisé (HT)
   const cart = Array.isArray(rawCart)
     ? rawCart.map((it) => ({
         sku: String(it?.sku ?? it?.id ?? "").trim(),
         name: String(it?.name ?? it?.label ?? "Article").trim(),
         qty: Number(it?.qty ?? it?.quantity ?? 1) || 1,
-        unitPrice: Number(it?.unitPrice ?? it?.price_ht ?? it?.price ?? 0) || 0,
-        taxRate: Number(it?.taxRate ?? it?.vat ?? 0) || 0,
+        unitPrice: Number(it?.unitPrice ?? it?.price_ht ?? it?.price ?? 0) || 0, // HT
+        taxRate: Number(it?.taxRate ?? it?.vat ?? 0) || 0,                       // %
       }))
     : [];
 
-  // === 4) Flux FRONT inchangé ===
   try {
     if (process.env.NODE_ENV !== "production") {
       console.log("↪️ Payload reçu (safe):", {
@@ -343,24 +359,21 @@ export default async function handler(req, res) {
       individualId = indiv.id;
       await updateIndividual(individualId, form);
       status = "Client mis à jour";
+      await ensureAddress(individualId, form, countryCode); // <-- AJOUT POUR L'UPDATE
     } else {
       const created = await createIndividual(form);
       individualId = created?.data?.id || created?.id;
       status = "Client créé";
-      if (form.adresse || form.ville || form.codePostal) {
-        try {
-          await createAddress(individualId, form, countryCode);
-        } catch (e) {
-          console.warn("Adresse non créée:", e.message);
-        }
-      }
+      await ensureAddress(individualId, form, countryCode); // <-- AJOUT POUR LA CREATION (remplace l'ancien if)
     }
 
     // 2) Devis
-    // Si un estimateId a été passé explicitement (topLevelEstimateId), on peut renvoyer cet id sans créer
     let estimate = null;
     let estimateId = topLevelEstimateId || null;
     if (!estimateId) {
+      if (!Array.isArray(cart) || cart.length === 0) {
+        return res.status(400).json({ ok: false, error: "Panier vide : impossible de créer un devis" });
+      }
       estimate = await createEstimate({
         individualId,
         form,
@@ -370,25 +383,17 @@ export default async function handler(req, res) {
         countryCode,
       });
       estimateId = estimate?.data?.id || estimate?.id || null;
-    } else {
-      // Optionnel : on pourrait fetch l'estimate pour valider son existence
-      if (process.env.NODE_ENV !== "production") {
-        console.log("Utilisation d'un estimateId fourni:", estimateId);
-      }
+    } else if (process.env.NODE_ENV !== "production") {
+      console.log("Utilisation d'un estimateId fourni:", estimateId);
     }
 
-    // 3) Conversion conditionnelle du devis en facture (best-effort)
+    // 3) Conversion conditionnelle du devis en facture
     let invoiceId = null;
-    // On ne convertit que si on demande explicitement (convertToInvoice === true) ou si c'est
-    // déclenché par un webhook payment_succeeded (géré plus haut).
-    if (estimateId && (convertToInvoice === true)) {
+    if (estimateId && convertToInvoice === true) {
       try {
         const invoice = await sfetch(`${API_BASE}/estimates/${estimateId}/convert-to-invoice`, {
           method: "POST",
-          body: JSON.stringify({
-            status: "sent", // "draft" si tu préfères brouillon
-            send_email: false,
-          }),
+          body: JSON.stringify({ status: "sent", send_email: false }),
         });
         invoiceId = invoice?.data?.id || invoice?.id || null;
         console.log("🧾 Facture créée automatiquement :", invoiceId);
