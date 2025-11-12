@@ -5,7 +5,10 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ ok: false, error: "Method Not Allowed" });
   }
 
-  // ----- Body JSON sûr (compatible Vercel) -----
+  // ⚠️ IMPORTANT : on ne vérifie plus de header custom (Lemon ne peut pas en envoyer).
+  // (Si tu veux plus tard, implémente la vérif via X-Signature + signing secret Lemon.)
+
+  // ----- Lecture body JSON sûre -----
   async function readJsonBody() {
     if (req.body && typeof req.body === "object") return req.body;
     const chunks: Buffer[] = [];
@@ -19,11 +22,12 @@ export default async function handler(req: any, res: any) {
 
   try {
     const payload = await readJsonBody();
-    const data = payload?.data ?? {};
-    const attributes = data?.attributes ?? {};
 
-    // Email côté order / subscription (on balaie plusieurs champs possibles)
-    const emailCandidate =
+    const data = payload?.data || {};
+    const attributes = data?.attributes || {};
+
+    // Email (différents emplacements possibles suivant l’event)
+    const email =
       attributes?.user_email ||
       attributes?.email ||
       attributes?.customer_email ||
@@ -31,28 +35,29 @@ export default async function handler(req: any, res: any) {
       attributes?.customer?.email ||
       "";
 
-    const safeEmail = String(emailCandidate || "").trim().toLowerCase();
+    const safeEmail = String(email || "").trim().toLowerCase();
 
     if (process.env.NODE_ENV !== "production") {
       console.log("lemon-webhook in:", {
         type: data?.type,
         id: data?.id,
-        email: safeEmail || "<none>",
+        email: safeEmail,
       });
     }
 
-    // S’il n’y a pas d’email, on ACK pour éviter les retries infinis
+    // Pas d’email -> on ACK quand même pour éviter les retries
     if (!safeEmail) {
-      return res.status(200).json({ ok: true, forwarded: false, reason: "no email in webhook" });
+      return res.status(200).json({ ok: true, forwarded: false, reason: "no email" });
     }
 
-    // URL de base pour appeler notre API (ordre: SELF_BASE_URL > VERCEL_URL > localhost)
-    const baseUrl =
-      (process.env.SELF_BASE_URL && String(process.env.SELF_BASE_URL).replace(/\/$/, "")) ||
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "") ||
-      "http://localhost:3000";
+    // URL interne vers notre API (toujours le même host que la requête reçue)
+    const host =
+      (req.headers["x-forwarded-host"] as string) ||
+      (req.headers.host as string) ||
+      "vitalpetfrance.com";
+    const baseUrl = `https://${host}`;
 
-    // Forward minimal vers sellsy-sync (création/MAJ contact **uniquement**)
+    // On forward vers /api/sellsy-sync (création/màj contact uniquement)
     const fwd = await fetch(`${baseUrl}/api/sellsy-sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -67,16 +72,15 @@ export default async function handler(req: any, res: any) {
       }),
     });
 
-    const fwdText = await fwd.text();
     if (process.env.NODE_ENV !== "production") {
-      console.log("sellsy-sync <- webhook:", fwd.status, fwdText.slice(0, 400));
+      const fwdTxt = await fwd.text();
+      console.log("sellsy-sync <- webhook:", fwd.status, fwdTxt.slice(0, 300));
     }
 
-    // On répond 200 dans tous les cas pour que Lemon arrête les croix rouges
-    return res.status(200).json({ ok: true, forwarded: fwd.ok });
+    // Toujours 200 pour éviter les croix rouges côté Lemon
+    return res.status(200).json({ ok: true, forwarded: true });
   } catch (e: any) {
     console.error("lemon-webhook error:", e?.message || e);
-    // Toujours 200 (évite les retries agressifs)
     return res.status(200).json({ ok: true, forwarded: false, error: "handled" });
   }
 }
