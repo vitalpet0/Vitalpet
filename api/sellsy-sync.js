@@ -47,11 +47,16 @@ export default async function handler(req, res) {
 
   // === 2) Body venant du front OU d’un webhook interne ===
   const body = await readJsonBody();
+  // On accepte aussi convertToInvoice, kind et payload pour webhooks
   const {
     form: rawForm = {},
     cart: rawCart = [],
     currency = "EUR",
     shipping = null,
+    convertToInvoice = false,
+    kind = null,
+    payload: webhookPayload = null,
+    estimateId: topLevelEstimateId = null,
   } = body || {};
 
   // === 3) Helpers Sellsy v2 ===
@@ -252,6 +257,41 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, error: e.message, mode: "webhook" });
     }
   }
+
+  // ====== Support pour conversion depuis un webhook de paiement ======
+  // { kind: "payment_succeeded", payload: { estimateId, email } }
+  if (body?.kind === "payment_succeeded") {
+    try {
+      const p = body.payload || {};
+      const estimateId =
+        p.estimateId || p.estimate_id || p.sellsy_estimate_id || topLevelEstimateId || null;
+      const email = String(p.email || p.customer_email || "").trim().toLowerCase();
+
+      if (!estimateId) {
+        return res.status(400).json({ ok: false, error: "estimateId requis (payment_succeeded)" });
+      }
+
+      // On tente la conversion
+      try {
+        const invoice = await sfetch(`${API_BASE}/estimates/${estimateId}/convert-to-invoice`, {
+          method: "POST",
+          body: JSON.stringify({
+            status: "sent",
+            send_email: false,
+          }),
+        });
+        const invoiceId = invoice?.data?.id || invoice?.id || null;
+        console.log("🧾 Devis converti via webhook:", estimateId, "->", invoiceId);
+        return res.status(200).json({ ok: true, mode: "payment_succeeded", estimateId, invoiceId });
+      } catch (err) {
+        console.warn("Erreur lors de la conversion du devis (webhook):", err.message);
+        return res.status(400).json({ ok: false, error: err.message, mode: "payment_succeeded" });
+      }
+    } catch (e) {
+      console.error("payment_succeeded handler error:", e.message || e);
+      return res.status(400).json({ ok: false, error: e.message || String(e), mode: "payment_succeeded" });
+    }
+  }
   // ====== fin du mode webhook ======
 
   // === 2-bis) Normalisation form (flux FRONT existant)
@@ -292,6 +332,7 @@ export default async function handler(req, res) {
         cartLen: cart.length,
         currency,
         shipping: shipping ? { ...shipping, amount: Number(shipping.amount) } : null,
+        convertToInvoice,
       });
     }
 
@@ -316,24 +357,36 @@ export default async function handler(req, res) {
     }
 
     // 2) Devis
-    const estimate = await createEstimate({
-      individualId,
-      form,
-      cart,
-      shipping,
-      currency,
-      countryCode,
-    });
-    const estimateId = estimate?.data?.id || estimate?.id || null;
+    // Si un estimateId a été passé explicitement (topLevelEstimateId), on peut renvoyer cet id sans créer
+    let estimate = null;
+    let estimateId = topLevelEstimateId || null;
+    if (!estimateId) {
+      estimate = await createEstimate({
+        individualId,
+        form,
+        cart,
+        shipping,
+        currency,
+        countryCode,
+      });
+      estimateId = estimate?.data?.id || estimate?.id || null;
+    } else {
+      // Optionnel : on pourrait fetch l'estimate pour valider son existence
+      if (process.env.NODE_ENV !== "production") {
+        console.log("Utilisation d'un estimateId fourni:", estimateId);
+      }
+    }
 
-    // 3) Conversion automatique du devis en facture (best-effort)
+    // 3) Conversion conditionnelle du devis en facture (best-effort)
     let invoiceId = null;
-    if (estimateId) {
+    // On ne convertit que si on demande explicitement (convertToInvoice === true) ou si c'est
+    // déclenché par un webhook payment_succeeded (géré plus haut).
+    if (estimateId && (convertToInvoice === true)) {
       try {
         const invoice = await sfetch(`${API_BASE}/estimates/${estimateId}/convert-to-invoice`, {
           method: "POST",
           body: JSON.stringify({
-            status: "sent",   // "draft" si tu préfères brouillon
+            status: "sent", // "draft" si tu préfères brouillon
             send_email: false,
           }),
         });

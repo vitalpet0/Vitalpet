@@ -120,14 +120,50 @@ export default function Checkout() {
     try {
       const totalCents = Math.round(grandTotalTTC * 100);
 
-      // Appel SAME-ORIGIN vers l’API Vercel (api/create-checkout)
+      // ---------------------------------------------------------
+      // 0) 1) OPTION RECOMMANDÉE : créer contact + devis chez Sellsy AVANT redirection
+      //    -> on récupère estimateId si disponible et on le passe à Lemon
+      // ---------------------------------------------------------
+      let estimateId = null;
+      try {
+        const ssRes = await fetch("/api/sellsy-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            form: f,
+            cart: cartPayload,
+            currency,
+            shipping,
+            convertToInvoice: false, // on crée le devis sans le convertir en facture pour l'instant
+          }),
+        });
+        const ssText = await ssRes.text();
+        let ssJson = null;
+        try { ssJson = JSON.parse(ssText); } catch {}
+        if (ssRes.ok) {
+          estimateId = ssJson?.estimateId || ssJson?.estimate_id || null;
+          console.log("sellsy-sync ok:", ssJson);
+        } else {
+          console.warn("sellsy-sync non ok:", ssRes.status, ssText);
+        }
+      } catch (err) {
+        console.warn("Erreur sellsy-sync (on continue):", err);
+      }
+
+      // ---------------------------------------------------------
+      // 1) Appel SAME-ORIGIN vers l’API Vercel (api/create-checkout)
+      //    On ajoute sellsy_estimate_id si on l'a
+      // ---------------------------------------------------------
+      const createPayload = {
+        total_cents: totalCents,
+        email: f.email,
+        ...(estimateId ? { sellsy_estimate_id: estimateId } : {}),
+      };
+
       const res = await fetch("/api/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          total_cents: totalCents,
-          email: f.email,
-        }),
+        body: JSON.stringify(createPayload),
       });
 
       const text = await res.text();

@@ -23,7 +23,8 @@ export default async function handler(req: Request) {
 
   try {
     HDR["x-stage"] = "parse-body";
-    const { total_cents, email } = await req.json();
+    // On accepte maintenant sellsy_estimate_id en option
+    const { total_cents, email, sellsy_estimate_id } = await req.json();
     if (!Number.isFinite(total_cents) || total_cents <= 0) {
       return j({ error: "total_cents invalide" }, 400, HDR);
     }
@@ -112,13 +113,21 @@ export default async function handler(req: Request) {
 
     // 3) Create checkout
     HDR["x-stage"] = "create-checkout";
+
+    // Prépare checkout_data en incluant sellsy_estimate_id si fourni
+    const checkoutData: Record<string, any> = { email: email || "" };
+    if (sellsy_estimate_id) {
+      // on force en string pour éviter les problèmes de typage
+      checkoutData.sellsy_estimate_id = String(sellsy_estimate_id);
+    }
+
     const payload = {
       data: {
         type: "checkouts",
         attributes: {
           custom_price: total_cents,           // cents (prix variable)
           test_mode: true,                     // garde true tant que ton app est en review
-          checkout_data: { email: email || "" },
+          checkout_data: checkoutData,
         },
         relationships: {
           store:   { data: { type: "stores",   id: String(storeId) } },
