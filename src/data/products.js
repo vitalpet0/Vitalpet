@@ -44,7 +44,7 @@ export const PRODUCTS = [
   { id: "rcC-014", name: "Mother and Babycat pour chatte et chaton 2kg", brand: "Royal Canin", age: "Chaton", price: 32.69, pet: "chat", cat: "Croquettes", feature: "", size: "2kg", img: "https://i.postimg.cc/GmYKk1nZ/659193-a395309c652349e88288b7d0463cee2f-mv2.avif" },
   { id: "rcC-015", name: "Mother and Babycat pour chatte et chaton 4kg", brand: "Royal Canin", age: "Chaton", price: 55.69, pet: "chat", cat: "Croquettes", feature: "", size: "4kg", img: "https://i.postimg.cc/GmYKk1nZ/659193-a395309c652349e88288b7d0463cee2f-mv2.avif" },
 
-  { id: "rcC-032", name: "Sterilised 37 2kg",  brand: "Royal Canin", age: "Chaton", price: 26.89, pet: "chat", cat: "Croquettes", feature: "", size: "4kg",  img: "https://i.postimg.cc/zB3RFnR7/659193-311755a9d71741b8ac57ad6c713c9872-mv2.avif" },
+  { id: "rcC-032", name: "Sterilised 37 2kg",  brand: "Royal Canin", age: "Chaton", price: 26.89, pet: "chat", cat: "Croquettes", feature: "", size: "2kg",  img: "https://i.postimg.cc/zB3RFnR7/659193-311755a9d71741b8ac57ad6c713c9872-mv2.avif" },
   { id: "rcC-016", name: "Sterilised 37 4kg",  brand: "Royal Canin", age: "Chaton", price: 44.99, pet: "chat", cat: "Croquettes", feature: "", size: "4kg",  img: "https://i.postimg.cc/zB3RFnR7/659193-311755a9d71741b8ac57ad6c713c9872-mv2.avif" },
   { id: "rcC-017", name: "Sterilised 37 10kg", brand: "Royal Canin", age: "Chaton", price: 89.69, pet: "chat", cat: "Croquettes", feature: "", size: "10kg", img: "https://i.postimg.cc/zB3RFnR7/659193-311755a9d71741b8ac57ad6c713c9872-mv2.avif" },
 
