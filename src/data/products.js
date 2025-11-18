@@ -44,8 +44,79 @@ export const PRODUCTS = [
   { id: "rcC-014", name: "Mother and Babycat pour chatte et chaton 2kg", brand: "Royal Canin", age: "Chaton", price: 32.69, pet: "chat", cat: "Croquettes", feature: "", size: "2kg", img: "https://i.postimg.cc/GmYKk1nZ/659193-a395309c652349e88288b7d0463cee2f-mv2.avif" },
   { id: "rcC-015", name: "Mother and Babycat pour chatte et chaton 4kg", brand: "Royal Canin", age: "Chaton", price: 55.69, pet: "chat", cat: "Croquettes", feature: "", size: "4kg", img: "https://i.postimg.cc/GmYKk1nZ/659193-a395309c652349e88288b7d0463cee2f-mv2.avif" },
 
+    { id: "rcC-016", name: "Sterilised 37 2kg",  brand: "Royal Canin", age: "Chaton", price: 26.89, pet: "chat", cat: "Croquettes", feature: "", size: "4kg",  img: "https://i.postimg.cc/zB3RFnR7/659193-311755a9d71741b8ac57ad6c713c9872-mv2.avif" },
   { id: "rcC-016", name: "Sterilised 37 4kg",  brand: "Royal Canin", age: "Chaton", price: 44.99, pet: "chat", cat: "Croquettes", feature: "", size: "4kg",  img: "https://i.postimg.cc/zB3RFnR7/659193-311755a9d71741b8ac57ad6c713c9872-mv2.avif" },
   { id: "rcC-017", name: "Sterilised 37 10kg", brand: "Royal Canin", age: "Chaton", price: 89.69, pet: "chat", cat: "Croquettes", feature: "", size: "10kg", img: "https://i.postimg.cc/zB3RFnR7/659193-311755a9d71741b8ac57ad6c713c9872-mv2.avif" },
-];
 
+  { id: "rcC-018", name: "Indoor 7+ 1.5kg",        brand: "Royal Canin", age: "Chaton", price: 22.19, pet: "chat", cat: "Croquettes", feature: "", size: "1.5kg",  img: "" },
+  { id: "rcC-019", name: "Indoor 7+ 3.5kg",        brand: "Royal Canin", age: "Chaton", price: 42.29, pet: "chat", cat: "Croquettes", feature: "", size: "3.5kg",  img: "" },
+
+  { id: "rcC-020", name: "Sterilised 7+ 1.5kg",    brand: "Royal Canin", age: "Chaton", price: 21.79, pet: "chat", cat: "Croquettes", feature: "", size: "1.5kg",  img: "" },
+  { id: "rcC-021", name: "Sterilised 7+ 3.5kg",    brand: "Royal Canin", age: "Chaton", price: 41.49, pet: "chat", cat: "Croquettes", feature: "", size: "3.5kg",  img: "" },
+  { id: "rcC-022", name: "Sterilised 7+ 10kg",     brand: "Royal Canin", age: "Chaton", price: 98.69, pet: "chat", cat: "Croquettes", feature: "", size: "10kg",  img: "" },
+
+  { id: "rcC-023", name: "Indoor Long Hair 2kg",   brand: "Royal Canin", age: "Chaton", price: 26.99, pet: "chat", cat: "Croquettes", feature: "", size: "2kg",   img: "" },
+  { id: "rcC-024", name: "Indoor Long Hair 4kg",   brand: "Royal Canin", age: "Chaton", price: 45.89, pet: "chat", cat: "Croquettes", feature: "", size: "4kg",   img: "" },
+
+  { id: "rcC-025", name: "Kitten Sterilised Sauce - Sachet fraîcheur pour chaton stérilisé 10kg",
+                    brand: "Royal Canin", age: "Chaton", price: 91.49, pet: "chat", cat: "Croquettes", feature: "", size: "10kg",  img: "" },
+
+  { id: "rcC-026", name: "Indoor 27 2kg",          brand: "Royal Canin", age: "Chaton", price: 26.99, pet: "chat", cat: "Croquettes", feature: "", size: "2kg",   img: "" },
+  { id: "rcC-027", name: "Indoor 27 4kg",          brand: "Royal Canin", age: "Chaton", price: 45.99, pet: "chat", cat: "Croquettes", feature: "", size: "4kg",   img: "" },
+  { id: "rcC-028", name: "Indoor 27 10kg",         brand: "Royal Canin", age: "Chaton", price: 91.49, pet: "chat", cat: "Croquettes", feature: "", size: "10kg",  img: "" },
+
+  { id: "rcC-029", name: "Outdoor 2kg",            brand: "Royal Canin", age: "Chaton", price: 26.99, pet: "chat", cat: "Croquettes", feature: "", size: "2kg",   img: "" },
+  { id: "rcC-030", name: "Outdoor 4kg",            brand: "Royal Canin", age: "Chaton", price: 45.99, pet: "chat", cat: "Croquettes", feature: "", size: "4kg",   img: "" },
+  { id: "rcC-031", name: "Outdoor 10kg",           brand: "Royal Canin", age: "Chaton", price: 91.49, pet: "chat", cat: "Croquettes", feature: "", size: "10kg",  img: "" },
+
+  // --- Fraîcheurs (sachets) ---
+
+  { id: "rcC-032", name: "Kitten Mousse - Sachet fraîcheur pour chaton 12*85g",
+                    brand: "Royal Canin", age: "Chaton", price: 18.89, pet: "chat", cat: "Fraicheurs", feature: "", size: "12*85g", img: "" },
+
+  { id: "rcC-033", name: "Kitten Sterilised Sauce - Sachet fraîcheur pour chaton stérilisé 12*85g",
+                    brand: "Royal Canin", age: "Chaton", price: 18.89, pet: "chat", cat: "Fraicheurs", feature: "", size: "12*85g", img: "" },
+
+  { id: "rcC-034", name: "Indoor Sterilised en gelée 12*85g",
+                    brand: "Royal Canin", age: "Chaton", price: 17.19, pet: "chat", cat: "Fraicheurs", feature: "", size: "12*85g", img: "" },
+
+  { id: "rcC-035", name: "Kitten Sauce - Sachet fraîcheur pour chaton 12*85g",
+                    brand: "Royal Canin", age: "Chaton", price: 18.89, pet: "chat", cat: "Fraicheurs", feature: "", size: "12*85g", img: "" },
+
+  { id: "rcC-036", name: "Sterilised en sauce 12*85g",
+                    brand: "Royal Canin", age: "Chaton", price: 17.19, pet: "chat", cat: "Fraicheurs", feature: "", size: "12*85g", img: "" },
+
+  { id: "rcC-037", name: "Instinctive mousse 12*85g",
+                    brand: "Royal Canin", age: "Chaton", price: 20.69, pet: "chat", cat: "Fraicheurs", feature: "", size: "12*85g", img: "" },
+
+  { id: "rcC-038", name: "Instinctive en gelée 12*85g",
+                    brand: "Royal Canin", age: "Chaton", price: 17.19, pet: "chat", cat: "Fraicheurs", feature: "", size: "12*85g", img: "" },
+
+  { id: "rcC-039", name: "Instinctive en sauce 12*85g",
+                    brand: "Royal Canin", age: "Chaton", price: 17.19, pet: "chat", cat: "Fraicheurs", feature: "", size: "12*85g", img: "" },
+
+  { id: "rcC-040", name: "Sterilised en gelée 12*85g",
+                    brand: "Royal Canin", age: "Chaton", price: 17.19, pet: "chat", cat: "Fraicheurs", feature: "", size: "12*85g", img: "" },
+
+  { id: "rcC-041", name: "Indoor Sterilised 7+ en gelée 12*85g",
+                    brand: "Royal Canin", age: "Chaton", price: 20.69, pet: "chat", cat: "Fraicheurs", feature: "", size: "12*85g", img: "" },
+
+  { id: "rcC-042", name: "Indoor Sterilised 7+ en sauce 12*85g",
+                    brand: "Royal Canin", age: "Chaton", price: 18.89, pet: "chat", cat: "Fraicheurs", feature: "", size: "12*85g", img: "" },
+
+  { id: "rcC-043", name: "Indoor Sterilised en sauce 12*85g",
+                    brand: "Royal Canin", age: "Chaton", price: 17.19, pet: "chat", cat: "Fraicheurs", feature: "", size: "12*85g", img: "" },
+
+  { id: "rcC-044", name: "Indoor Sterilised mousse 12*85g",
+                    brand: "Royal Canin", age: "Chaton", price: 20.69, pet: "chat", cat: "Fraicheurs", feature: "", size: "12*85g", img: "" },
+
+  { id: "rcC-045", name: "SENSORY™ FEEL en gelée 12*85g",
+                    brand: "Royal Canin", age: "Chaton", price: 17.19, pet: "chat", cat: "Fraicheurs", feature: "", size: "12*85g", img: "" },
+
+  { id: "rcC-046", name: "SENSORY™ TASTE en sauce 12*85g",
+                    brand: "Royal Canin", age: "Chaton", price: 17.19, pet: "chat", cat: "Fraicheurs", feature: "", size: "12*85g", img: "" },
+
+  { id: "rcC-047", name: "Digestive Mousse 12*85g",
+                    brand: "Royal Canin", age: "Chaton", price: 20.65, pet: "chat", cat: "Fraicheurs", feature: "", size: "12*85g", img: "" },
+];
 export default PRODUCTS;
