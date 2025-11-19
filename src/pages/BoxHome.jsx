@@ -659,14 +659,23 @@ const goCart = () => {
           <div>
             <p className="font-medium mb-2">Aide</p>
             <ul className="space-y-1 text-neutral-600">
-              <li>FAQ</li>
-              <li>Contact</li>
-              <li>CGV & Confidentialité</li>
+              <li><a href="#faq" className="hover:underline">FAQ</a></li>
+              <li><a href="mailto:contact@vitalpetfrance.com" className="hover:underline">Contact</a></li>
+              <li>
+                <a
+                  href="/cgv"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-emerald-700 underline"
+                >
+                  CGV &amp; Confidentialité
+                </a>
+              </li>
             </ul>
           </div>
         </div>
         <div className="text-xs text-neutral-500 text-center pb-8">
-          © {new Date().getFullYear()} VitalPet — Maquette concept. Images : Pexels.
+          © {new Date().getFullYear()} VitalPet Ltd
         </div>
       </footer>
     </div>

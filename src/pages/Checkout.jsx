@@ -157,6 +157,8 @@ export default function Checkout() {
       const createPayload = {
         total_cents: totalCents,
         email: f.email,
+        accepted_cgv: !!f.terms, // <-- champ ajouté pour preuve côté serveur
+        accepted_cgv_at: new Date().toISOString(), // <-- horodatage côté client (optionnel)
         ...(estimateId ? { sellsy_estimate_id: estimateId } : {}),
       };
 
@@ -278,7 +280,11 @@ export default function Checkout() {
         </div>
         <div className="md:col-span-2 flex items-center gap-2">
           <input id="terms" type="checkbox" name="terms" checked={form.terms} onChange={onChange} />
-          <label htmlFor="terms" className="text-sm">J’accepte les conditions générales *</label>
+          <label htmlFor="terms" className="text-sm">
+            J’accepte les
+            <a href="/cgv" target="_blank" rel="noopener noreferrer" className="ml-2 text-emerald-700 underline">Conditions Générales</a>
+            &nbsp;*
+          </label>
         </div>
         <div className="md:col-span-2">
           <button type="submit" disabled={sending} className="w-full md:w-auto px-6 py-3 rounded bg-black text-white hover:opacity-90 disabled:opacity-50" style={{ marginBottom: "calc(16px + env(safe-area-inset-bottom))" }}>

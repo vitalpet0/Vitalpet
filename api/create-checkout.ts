@@ -24,12 +24,30 @@ export default async function handler(req: Request) {
   try {
     HDR["x-stage"] = "parse-body";
     // On accepte sellsy_estimate_id en option pour le récupérer dans le webhook
-    const { total_cents, email, sellsy_estimate_id } = await req.json();
+    // On accepte aussi accepted_cgv et (optionnel) cgv_version
+    const body = await req.json();
+    const {
+      total_cents,
+      email,
+      sellsy_estimate_id,
+      accepted_cgv,
+      cgv_version,
+    } = body ?? {};
 
     if (!Number.isFinite(Number(total_cents)) || Number(total_cents) <= 0) {
       return j({ error: "total_cents invalide" }, 400, HDR);
     }
     const totalCents = Math.round(Number(total_cents));
+
+    // Vérifier que les CGV ont été acceptées (contrôle serveur indispensable)
+    if (accepted_cgv !== true) {
+      return j({ error: "accepted_cgv_required", message: "Les conditions générales doivent être acceptées." }, 400, HDR);
+    }
+
+    // (Optionnel) valider le format de l'email
+    if (!email || !/^\S+@\S+\.\S+$/.test(String(email))) {
+      return j({ error: "invalid_email", message: "Email invalide ou absent." }, 400, HDR);
+    }
 
     HDR["x-stage"] = "read-env";
     const API_KEY = process.env.LEMON_API_KEY || "";
@@ -46,8 +64,14 @@ export default async function handler(req: Request) {
     }
 
     // --- Build checkout_data
-    const checkout_data: Record<string, any> = { email: email || "" };
+    // On préfère horodater côté serveur pour éviter les falsifications
+    const checkout_data: Record<string, any> = {
+      email: String(email || ""),
+      accepted_cgv: true,
+      accepted_cgv_at: new Date().toISOString(),
+    };
     if (sellsy_estimate_id) checkout_data.sellsy_estimate_id = String(sellsy_estimate_id);
+    if (cgv_version) checkout_data.cgv_version = String(cgv_version);
 
     HDR["x-stage"] = "create-checkout";
     const payload = {
