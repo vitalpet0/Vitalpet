@@ -18,11 +18,12 @@ const Product   = lazy(() => import("./pages/Product.jsx"));
 const Cart      = lazy(() => import("./pages/Cart.jsx"));
 const Checkout  = lazy(() => import("./pages/Checkout.jsx"));
 const Livraison = lazy(() => import("./pages/Livraison.jsx"));
+const CGV       = lazy(() => import("./pages/CGV.jsx")); // <-- ajouté
 
 export default function App() {
   // Préchargement “idle” de quelques routes fréquentes
   useEffect(() => {
-    prefetchRoutesIdle(["/checkout", "/cart", "/livraison"]);
+    prefetchRoutesIdle(["/checkout", "/cart", "/livraison", "/cgv"]); // /cgv ajouté
   }, []);
 
   return (
@@ -37,6 +38,7 @@ export default function App() {
           <Route path="/cart" element={<Cart />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/livraison" element={<Livraison />} />
+          <Route path="/cgv" element={<CGV />} /> {/* <-- route ajoutée */}
 
           {/* Auth */}
           <Route path="/login" element={<Login />} />
